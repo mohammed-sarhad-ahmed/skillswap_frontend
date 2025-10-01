@@ -2,27 +2,18 @@ import { BrowserRouter, Routes, Route } from "react-router";
 import SignupPage from "./SignupPage.jsx";
 import LoginPage from "./LoginPage.jsx";
 import ForgotPasswordPage from "./ForgotPasswordPage.jsx";
-import { Toaster } from "react-hot-toast";
+import PrivateRoute from "./PrivateRoute.jsx";
+import VerifyCodePage from "./VerifyCodePage.jsx";
 
 function App() {
   return (
     <BrowserRouter>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            fontSize: "14px",
-            borderRadius: "10px",
-            background: "#fff",
-            color: "#333",
-          },
-        }}
-      />
       <Routes>
+        <Route element={<PrivateRoute />}></Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/verify-code" element={<VerifyCodePage />} />
       </Routes>
     </BrowserRouter>
   );
