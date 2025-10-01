@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { API_BASE_URL } from "./Config";
+import { useNavigate } from "react-router";
 
 export default function SignupPage() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     fullname: "",
     email: "",
@@ -12,14 +15,30 @@ export default function SignupPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSignup = (e) => {
-    e.preventDefault();
-    if (form.password !== form.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
+  const handleSignup = async (e) => {
+    try {
+      e.preventDefault();
+      if (form.password !== form.confirmPassword) {
+        alert("Passwords do not match");
+        return;
+      }
+      console.log(1);
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullname: form.fullname,
+          email: form.email,
+          password: form.password,
+          passwordConfirm: form.confirmPassword,
+        }),
+      });
+      const data = await response.json();
+      console.log("Signup response data:", data);
+    } catch (error) {
+      console.error("Error during signup:", error);
+      alert("An error occurred. Please try again.");
     }
-    console.log("Signup:", form);
-    
   };
 
   return (
