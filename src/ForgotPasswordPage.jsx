@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { toast } from "react-hot-toast";
+import { useNavigate } from "react-router";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const navigate = useNavigate();
 
   const handleForgotPassword = (e) => {
     e.preventDefault();
@@ -45,7 +48,7 @@ export default function ForgotPasswordPage() {
         <div className="text-center text-sm text-gray-600 mt-6">
           Remember your password?{" "}
           <button
-            onClick={() => console.log("Navigate to login")}
+            onClick={() => navigate("/login")}
             className="hover:text-blue-600 hover:underline"
           >
             Log In

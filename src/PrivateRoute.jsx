@@ -1,7 +1,8 @@
 import { Navigate, Outlet } from "react-router";
+import { getToken } from "./ManageToken";
 
 function isLoggedIn() {
-  const token = localStorage.getItem("token");
+  const token = getToken();
   if (!token) return false;
 
   try {

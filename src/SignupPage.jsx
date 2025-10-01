@@ -45,7 +45,7 @@ export default function SignupPage() {
 
       setForm({ fullname: "", email: "", password: "", confirmPassword: "" });
       saveToken(data.data.token);
-      toast.success("✅ Signup successful! Please verify your email.", {
+      toast.success(" Signup successful! Please verify your email.", {
         duration: 4000,
       });
       navigate("/verify-code");

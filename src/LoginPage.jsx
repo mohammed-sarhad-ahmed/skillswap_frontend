@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -59,13 +61,13 @@ export default function LoginPage() {
 
         <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mt-6 space-y-2 sm:space-y-0">
           <button
-            onClick={() => console.log("Forgot password clicked")}
+            onClick={() => navigate("/forgot-password")}
             className="hover:text-blue-600 hover:underline"
           >
             Forgot Password?
           </button>
           <button
-            onClick={() => console.log("Navigate to signup")}
+            onClick={() => navigate("/signup")}
             className="hover:text-blue-600 hover:underline"
           >
             Don’t have an account? Sign Up

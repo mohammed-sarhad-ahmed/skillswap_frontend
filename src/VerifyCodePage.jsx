@@ -2,14 +2,15 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
+import { useNavigate } from "react-router";
 
 export default function VerifyCodePage() {
+  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // Countdown effect
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
@@ -32,10 +33,11 @@ export default function VerifyCodePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Invalid code");
 
-      toast.success("✅ Your account is now active!", { duration: 4000 });
+      toast.success("Your account is now active!", { duration: 4000 });
       setCode("");
+      navigate("/dashboard");
     } catch (err) {
-      toast.error(`❌ ${err.message}`);
+      toast.error(`${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -56,7 +58,7 @@ export default function VerifyCodePage() {
       toast.success("📩 New code sent! Check your email.");
       setCooldown(20);
     } catch (err) {
-      toast.error(`❌ ${err.message}`);
+      toast.error(`${err.message}`);
     } finally {
       setResending(false);
     }

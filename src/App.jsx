@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router";
 import { Toaster } from "react-hot-toast";
+import Dashboard from "./Dashboard";
 
 import PrivateRoute from "./PrivateRoute";
 import LoginPage from "./LoginPage";
@@ -20,7 +21,9 @@ export default function App() {
       />
 
       <Routes>
-        <Route element={<PrivateRoute />}></Route>
+        <Route element={<PrivateRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
