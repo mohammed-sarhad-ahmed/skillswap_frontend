@@ -1,15 +1,37 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router";
+import { API_BASE_URL } from "./Config";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const navigate = useNavigate();
 
-  const handleForgotPassword = (e) => {
+  const handleForgotPassword = async (e) => {
     e.preventDefault();
-    console.log("Forgot Password request:", email);
-    // call your backend forgot password API here
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+      if (data.status.toLowerCase() !== "success")
+        throw new Error(data.message || "Failed to send reset link");
+
+      toast.success(
+        "If this email is registered, a reset link has been sent.",
+        {
+          duration: 4000,
+        }
+      );
+      setEmail("");
+      navigate("/login");
+    } catch (err) {
+      toast.error(`${err.message}`);
+    }
   };
 
   return (
