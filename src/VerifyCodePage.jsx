@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
 
@@ -6,13 +6,22 @@ export default function VerifyCodePage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Countdown effect
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const handleVerify = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/verify-code`, {
+      const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
@@ -22,8 +31,7 @@ export default function VerifyCodePage() {
       if (!res.ok) throw new Error(data.message || "Invalid code");
 
       toast.success("✅ Your account is now active!");
-      // optional: redirect
-      // navigate("/login");
+      setCode("");
     } catch (err) {
       toast.error(`❌ ${err.message}`);
     } finally {
@@ -35,7 +43,7 @@ export default function VerifyCodePage() {
     setResending(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/resend-code`, {
+      const res = await fetch(`${API_BASE_URL}/auth/resend-verification-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -44,6 +52,7 @@ export default function VerifyCodePage() {
       if (!res.ok) throw new Error(data.message || "Failed to resend code");
 
       toast.success("📩 New code sent! Check your email.");
+      setCooldown(20);
     } catch (err) {
       toast.error(`❌ ${err.message}`);
     } finally {
@@ -89,10 +98,14 @@ export default function VerifyCodePage() {
           <p className="text-sm text-gray-600">Didn’t get the code?</p>
           <button
             onClick={handleResend}
-            disabled={resending}
+            disabled={resending || cooldown > 0}
             className="mt-2 text-blue-600 hover:underline disabled:opacity-50"
           >
-            {resending ? "Resending..." : "Resend Code"}
+            {resending
+              ? "Resending..."
+              : cooldown > 0
+              ? `Resend in ${cooldown}s`
+              : "Resend Code"}
           </button>
         </div>
       </div>

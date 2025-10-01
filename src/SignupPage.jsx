@@ -25,11 +25,11 @@ export default function SignupPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await fetch(`${API_BASE_URL}/auth/sign-up`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullname: form.fullname,
+          fullName: form.fullname,
           email: form.email,
           password: form.password,
           passwordConfirm: form.confirmPassword,
@@ -48,7 +48,7 @@ export default function SignupPage() {
       navigate("/verify-code");
     } catch (error) {
       console.error("Signup error:", error);
-      toast.error("An unexpected error occurred.");
+      toast.error(error.message || "An error occurred during signup");
     }
   };
 

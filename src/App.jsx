@@ -1,13 +1,24 @@
 import { BrowserRouter, Routes, Route } from "react-router";
-import SignupPage from "./SignupPage.jsx";
-import LoginPage from "./LoginPage.jsx";
-import ForgotPasswordPage from "./ForgotPasswordPage.jsx";
-import PrivateRoute from "./PrivateRoute.jsx";
-import VerifyCodePage from "./VerifyCodePage.jsx";
+import { Toaster } from "react-hot-toast";
 
-function App() {
+import PrivateRoute from "./PrivateRoute";
+import LoginPage from "./LoginPage";
+import SignupPage from "./SignupPage";
+import ForgotPasswordPage from "./ForgotPasswordPage";
+import VerifyCodePage from "./VerifyCodePage";
+
+export default function App() {
   return (
     <BrowserRouter>
+      {/* Toast container is global now */}
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          duration: 2000,
+        }}
+      />
+
       <Routes>
         <Route element={<PrivateRoute />}></Route>
         <Route path="/login" element={<LoginPage />} />
@@ -18,5 +29,3 @@ function App() {
     </BrowserRouter>
   );
 }
-
-export default App;
