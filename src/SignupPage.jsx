@@ -2,7 +2,7 @@ import { useState } from "react";
 import { API_BASE_URL } from "./Config";
 import { useNavigate } from "react-router";
 import { Toaster, toast } from "react-hot-toast"; // React Hot Toast
-
+import { saveToken } from "./ManageToken";
 export default function SignupPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -43,8 +43,11 @@ export default function SignupPage() {
         return;
       }
 
-      toast.success(data.message || "Signup successful!");
       setForm({ fullname: "", email: "", password: "", confirmPassword: "" });
+      saveToken(data.data.token);
+      toast.success("✅ Signup successful! Please verify your email.", {
+        duration: 4000,
+      });
       navigate("/verify-code");
     } catch (error) {
       console.error("Signup error:", error);
@@ -55,7 +58,6 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 p-4">
       {/* Toaster for top-right notifications */}
-      <Toaster position="top-center" />
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">

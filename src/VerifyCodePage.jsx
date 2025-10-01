@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
+import { getToken } from "./ManageToken";
 
 export default function VerifyCodePage() {
   const [code, setCode] = useState("");
@@ -21,16 +22,17 @@ export default function VerifyCodePage() {
     setLoading(true);
 
     try {
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, token }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Invalid code");
 
-      toast.success("✅ Your account is now active!");
+      toast.success("✅ Your account is now active!", { duration: 4000 });
       setCode("");
     } catch (err) {
       toast.error(`❌ ${err.message}`);
