@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { API_BASE_URL } from "./Config";
 import { useNavigate } from "react-router";
+import { Toaster, toast } from "react-hot-toast"; // React Hot Toast
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -16,13 +17,14 @@ export default function SignupPage() {
   };
 
   const handleSignup = async (e) => {
+    e.preventDefault();
+
+    if (form.password !== form.confirmPassword) {
+      toast.error("Passwords do not match!");
+      return;
+    }
+
     try {
-      e.preventDefault();
-      if (form.password !== form.confirmPassword) {
-        alert("Passwords do not match");
-        return;
-      }
-      console.log(1);
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,16 +35,28 @@ export default function SignupPage() {
           passwordConfirm: form.confirmPassword,
         }),
       });
+
       const data = await response.json();
-      console.log("Signup response data:", data);
+
+      if (!response.ok) {
+        toast.error(data.message || "Signup failed");
+        return;
+      }
+
+      toast.success(data.message || "Signup successful!");
+      setForm({ fullname: "", email: "", password: "", confirmPassword: "" });
+      navigate("/login");
     } catch (error) {
-      console.error("Error during signup:", error);
-      alert("An error occurred. Please try again.");
+      console.error("Signup error:", error);
+      toast.error("An unexpected error occurred.");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 p-4">
+      {/* Toaster for top-right notifications */}
+      <Toaster position="top-right" />
+
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">
           Create Account
@@ -121,7 +135,7 @@ export default function SignupPage() {
         <div className="text-center text-sm text-gray-600 mt-6">
           Already have an account?{" "}
           <button
-            onClick={() => console.log("Navigate to login")}
+            onClick={() => navigate("/login")}
             className="hover:text-blue-600 hover:underline"
           >
             Log In
