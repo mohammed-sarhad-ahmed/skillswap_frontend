@@ -50,6 +50,7 @@ export default function VerifyCodePage() {
       const res = await fetch(`${API_BASE_URL}/auth/resend-verification-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: getToken() }),
       });
 
       const data = await res.json();
