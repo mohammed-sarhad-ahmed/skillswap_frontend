@@ -63,7 +63,6 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 p-4">
-      <Toaster position="top-right" />
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">
           Create Account

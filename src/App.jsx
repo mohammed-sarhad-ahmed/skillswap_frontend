@@ -7,6 +7,7 @@ import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import VerifyCodePage from "./VerifyCodePage";
+import NotFoundPage from "./NotFoundPage";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-code" element={<VerifyCodePage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );
