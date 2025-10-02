@@ -1,17 +1,44 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Eye, EyeOff } from "lucide-react"; // install lucide-react or use any icon lib
+import { Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
+import { API_BASE_URL } from "./Config";
+
+import { saveToken } from "./ManageToken";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    console.log("Login:", { email, password });
-    // call your backend login API here
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Login failed");
+      }
+
+      saveToken(data.data.token);
+      toast.success("Logged in successfully");
+
+      navigate("/dashboard");
+    } catch (err) {
+      toast.error(err.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -25,7 +52,6 @@ export default function LoginPage() {
         </p>
 
         <form onSubmit={handleLogin} className="space-y-5">
-          {/* Email input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -40,7 +66,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password input with toggle */}
           <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
@@ -62,16 +87,17 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 shadow-md transition"
+            disabled={loading}
+            className={`w-full ${
+              loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+            } text-white py-3 rounded-xl font-semibold shadow-md transition`}
           >
-            Log In
+            {loading ? "Logging in..." : "Log In"}
           </button>
         </form>
 
-        {/* Links */}
         <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mt-6 space-y-2 sm:space-y-0">
           <button
             onClick={() => navigate("/forgot-password")}
