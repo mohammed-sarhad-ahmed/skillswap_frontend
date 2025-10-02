@@ -8,6 +8,7 @@ import SignupPage from "./SignupPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import VerifyCodePage from "./VerifyCodePage";
 import NotFoundPage from "./NotFoundPage";
+import PublicRoute from "./PublicRoute";
 
 export default function App() {
   return (
@@ -24,10 +25,14 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
         </Route>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/verify-code" element={<VerifyCodePage />} />
+
+        <Route element={<PublicRoute />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/verify-code" element={<VerifyCodePage />} />
+        </Route>
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
