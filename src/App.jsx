@@ -12,7 +12,6 @@ import NotFoundPage from "./NotFoundPage";
 export default function App() {
   return (
     <BrowserRouter>
-      {/* Toast container is global now */}
       <Toaster
         position="top-center"
         reverseOrder={false}
