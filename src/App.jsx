@@ -22,15 +22,18 @@ export default function App() {
       />
 
       <Routes>
-        <Route element={<PrivateRoute />}>
+        <Route element={<PrivateRoute requireVerified={true} />}>
           <Route path="/dashboard" element={<Dashboard />} />
+        </Route>
+
+        <Route element={<PrivateRoute requireVerified={false} />}>
+          <Route path="/verify-code" element={<VerifyCodePage />} />
         </Route>
 
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/verify-code" element={<VerifyCodePage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
