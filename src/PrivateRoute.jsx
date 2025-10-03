@@ -9,6 +9,10 @@ export default function PrivateRoute({ requireVerified = true }) {
   const [redirect, setRedirect] = useState(null);
   const [user, setUser] = useState(null);
   const location = useLocation();
+  console.log("Location:", location.pathname);
+  console.log("Require Verified:", requireVerified);
+  console.log("User:", user);
+  console.log("Redirect:", redirect);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -50,14 +54,17 @@ export default function PrivateRoute({ requireVerified = true }) {
 
         // Only redirect to verify if verification is required
         if (requireVerified && !userData.isEmailVerified) {
+          await fetch(`${API_BASE_URL}/auth/resend-verification-code`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          });
           setRedirect("/verify-code");
         }
       } catch {
         toast.error("Network error. Please try again later.", {
           duration: 3000,
         });
-        removeToken();
-        setRedirect("/login");
       } finally {
         setChecking(false);
       }
