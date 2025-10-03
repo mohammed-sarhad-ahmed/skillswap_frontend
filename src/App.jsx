@@ -9,6 +9,7 @@ import ForgotPasswordPage from "./ForgotPasswordPage";
 import VerifyCodePage from "./VerifyCodePage";
 import NotFoundPage from "./NotFoundPage";
 import PublicRoute from "./PublicRoute";
+import ResetPasswordPage from "./ResetPassword";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         reverseOrder={false}
         toastOptions={{
           duration: 2000,
+          style: { fontSize: "16px" },
         }}
       />
 
@@ -34,6 +36,10 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route
+            path="/reset-password/:token"
+            element={<ResetPasswordPage />}
+          />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

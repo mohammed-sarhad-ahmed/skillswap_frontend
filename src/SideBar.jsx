@@ -1,6 +1,5 @@
-"use client";
-
 import { Calendar, ClipboardList, Settings, User, LogOut } from "lucide-react";
+import { API_BASE_URL } from "./Config";
 
 import {
   Sidebar,
@@ -33,12 +32,12 @@ export default function AppSidebar() {
       const token = getToken();
 
       if (token) {
-        const res = await fetch("/api/logout", {
+        const res = await fetch(`${API_BASE_URL}/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ token }),
         });
 
         if (!res.ok) {
