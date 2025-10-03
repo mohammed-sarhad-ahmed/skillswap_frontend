@@ -2,10 +2,8 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
-import { useNavigate } from "react-router";
 
 export default function VerifyCodePage() {
-  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -35,7 +33,7 @@ export default function VerifyCodePage() {
 
       toast.success("Your account is now active!", { duration: 4000 });
       setCode("");
-      navigate("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err) {
       toast.error(`${err.message}`);
     } finally {

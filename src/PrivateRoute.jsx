@@ -9,10 +9,6 @@ export default function PrivateRoute({ requireVerified = true }) {
   const [redirect, setRedirect] = useState(null);
   const [user, setUser] = useState(null);
   const location = useLocation();
-  console.log("Location:", location.pathname);
-  console.log("Require Verified:", requireVerified);
-  console.log("User:", user);
-  console.log("Redirect:", redirect);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -73,12 +69,10 @@ export default function PrivateRoute({ requireVerified = true }) {
     checkAuth();
   }, [requireVerified]);
 
-  // ✅ Allow unverified users to access verify-code page
   if (user && !user.isEmailVerified && location.pathname === "/verify-code") {
     return <Outlet />;
   }
 
-  // ✅ Prevent verified users from accessing verify-code page
   if (user && user.isEmailVerified && location.pathname === "/verify-code") {
     return <Navigate to="/dashboard" replace />;
   }
