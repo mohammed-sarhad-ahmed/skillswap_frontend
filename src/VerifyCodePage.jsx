@@ -33,7 +33,7 @@ export default function VerifyCodePage() {
 
       toast.success("Your account is now active!", { duration: 4000 });
       setCode("");
-      window.location.href = "/dashboard";
+      window.location.href = "/profile";
     } catch (err) {
       toast.error(`${err.message}`);
     } finally {

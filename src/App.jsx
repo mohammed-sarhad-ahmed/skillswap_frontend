@@ -11,6 +11,7 @@ import PublicRoute from "./PublicRoute";
 import ResetPasswordPage from "./ResetPassword";
 import MainLayout from "./MainLayout";
 import SkillsPage from "./Skills";
+import ProfilePage from "./Profile";
 
 export default function App() {
   return (
@@ -26,20 +27,15 @@ export default function App() {
 
       <Routes>
         <Route element={<PrivateRoute requireVerified={true} />}>
-          <Route element={<PrivateRoute requireVerified={true} />}>
-            <Route element={<MainLayout />}>
-              <Route path="/sessions" element={<div>Sessions Page</div>} />
-              <Route
-                path="/appointments"
-                element={<div>Appointments Page</div>}
-              />
-              <Route path="/skills" element={<SkillsPage />} />
-              <Route path="/profile" element={<div>Profile Page</div>} />
-              <Route
-                path="/buy-credits"
-                element={<div>Buy Credits Page</div>}
-              />
-            </Route>
+          <Route element={<MainLayout />}>
+            <Route path="/sessions" element={<div>Sessions Page</div>} />
+            <Route
+              path="/appointments"
+              element={<div>Appointments Page</div>}
+            />
+            <Route path="/skills" element={<SkillsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/buy-credits" element={<div>Buy Credits Page</div>} />
           </Route>
         </Route>
 
