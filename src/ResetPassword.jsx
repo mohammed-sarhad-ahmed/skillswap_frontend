@@ -12,6 +12,7 @@ export default function ResetPasswordPage() {
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false); // ✅ Loading state
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -40,6 +41,10 @@ export default function ResetPasswordPage() {
         navigate("/forgot-password");
         return;
       }
+
+      setLoading(true); // ✅ Start loading
+      toast.loading("Resetting password...");
+
       const response = await fetch(
         `${API_BASE_URL}/auth/reset-password/${token}`,
         {
@@ -53,6 +58,9 @@ export default function ResetPasswordPage() {
       );
 
       const data = await response.json();
+
+      toast.dismiss(); // Clear the loading toast
+
       if (data.status.toLowerCase() !== "success") {
         toast.error(data.message || "Password reset failed!");
         return;
@@ -61,7 +69,10 @@ export default function ResetPasswordPage() {
       toast.success("Password reset successful!");
       navigate("/login");
     } catch (error) {
+      toast.dismiss();
       toast.error(error.message || "An error occurred");
+    } finally {
+      setLoading(false); // ✅ Stop loading
     }
   };
 
@@ -122,11 +133,17 @@ export default function ResetPasswordPage() {
             </button>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 shadow-md transition"
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-semibold shadow-md transition ${
+              loading
+                ? "bg-blue-300 cursor-not-allowed text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
           >
-            Reset Password
+            {loading ? "Resetting..." : "Reset Password"}
           </button>
         </form>
 

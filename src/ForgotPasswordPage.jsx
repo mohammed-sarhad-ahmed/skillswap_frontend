@@ -5,12 +5,17 @@ import { API_BASE_URL } from "./Config";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [isDisabled, setIsDisabled] = useState(false);
   const navigate = useNavigate();
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
 
+    setIsDisabled(true); // disable button immediately
+    setTimeout(() => setIsDisabled(false), 5000); // re-enable after 5s
+
     try {
+      toast.loading("Processing...");
       const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,9 +66,14 @@ export default function ForgotPasswordPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 shadow-md transition"
+            disabled={isDisabled}
+            className={`w-full py-3 rounded-xl font-semibold shadow-md transition ${
+              isDisabled
+                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
-            Send Reset Link
+            {isDisabled ? "Please wait..." : "Send Reset Link"}
           </button>
         </form>
 
