@@ -1,4 +1,11 @@
-import { Calendar, ClipboardList, Settings, User, LogOut } from "lucide-react";
+import {
+  Calendar,
+  ClipboardList,
+  Settings,
+  CreditCard,
+  User,
+  LogOut,
+} from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
 import {
@@ -22,6 +29,7 @@ const navItems = [
   { title: "Sessions", to: "/sessions", icon: ClipboardList },
   { title: "Appointments", to: "/appointments", icon: Calendar },
   { title: "Skills", to: "/skills", icon: Settings },
+  { title: "Buy Credits", to: "/buy-credits", icon: CreditCard },
 ];
 
 export default function AppSidebar() {
@@ -60,9 +68,12 @@ export default function AppSidebar() {
     <Sidebar className="bg-white border-r border-slate-200">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-xs uppercase tracking-wide">
-            Navigation
+          <SidebarGroupLabel className="mb-8">
+            <div className="px-2 py-2 font-bold text-xl text-blue-600 tracking-wide uppercase">
+              SkillSwap
+            </div>
           </SidebarGroupLabel>
+
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (

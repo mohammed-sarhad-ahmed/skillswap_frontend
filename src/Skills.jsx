@@ -98,7 +98,7 @@ export default function SkillsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="flex flex-col min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
       {/* Search */}
       <div className="mb-6 w-full max-w-md mx-auto">
         <Input
@@ -121,19 +121,14 @@ export default function SkillsPage() {
           >
             {/* Top part: Avatar, Name, Skills */}
             <div className="flex flex-col items-center space-y-2">
-              {/* Avatar */}
               <img
                 src={user.avatar}
                 alt={user.name}
                 className="w-30 h-30 rounded-full"
               />
-
-              {/* Name */}
               <CardHeader className="w-full text-center p-0">
                 <CardTitle>{user.name}</CardTitle>
               </CardHeader>
-
-              {/* Skills */}
               <CardContent className="p-0">
                 <CardDescription>
                   <div className="flex flex-wrap gap-2 justify-center mt-1">
@@ -160,6 +155,9 @@ export default function SkillsPage() {
           </Card>
         ))}
       </div>
+
+      {/* Spacer to push pagination to bottom if page content is short */}
+      <div className="flex-grow"></div>
 
       {/* Pagination */}
       {totalPages > 1 && (

@@ -35,6 +35,10 @@ export default function App() {
               />
               <Route path="/skills" element={<SkillsPage />} />
               <Route path="/profile" element={<div>Profile Page</div>} />
+              <Route
+                path="/buy-credits"
+                element={<div>Buy Credits Page</div>}
+              />
             </Route>
           </Route>
         </Route>
