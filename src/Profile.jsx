@@ -3,9 +3,6 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Dialog } from "@headlessui/react";
 import { Trash2 } from "lucide-react";
-import TimePicker from "react-time-picker"; // npm install react-time-picker react-clock
-import "react-time-picker/dist/TimePicker.css";
-import "react-clock/dist/Clock.css";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("information");
@@ -138,67 +135,74 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Availability with responsive React TimePicker */}
+            {/* Availability */}
             <div className="w-full mb-6">
               <h3 className="text-xl font-semibold mb-4">Availability</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 {Object.keys(profile.availability).map((day) => (
                   <div
                     key={day}
-                    className="flex flex-col sm:flex-row items-center gap-2 border rounded-lg p-3 bg-white"
+                    className="flex flex-col sm:flex-row sm:justify-between items-start gap-4 border rounded-lg p-3 bg-white w-full"
                   >
-                    <span className="w-full sm:w-24 font-medium">{day}</span>
-                    <TimePicker
-                      onChange={(value) =>
-                        setProfile({
-                          ...profile,
-                          availability: {
-                            ...profile.availability,
-                            [day]: {
-                              ...profile.availability[day],
-                              start: value,
-                            },
-                          },
-                        })
-                      }
-                      value={profile.availability[day].start}
-                      format="hh:mm a"
-                      clearIcon={null}
-                      clockIcon={null}
-                      disableClock={true}
-                      className="flex-1 min-w-[120px] text-lg"
-                    />
-                    <TimePicker
-                      onChange={(value) =>
-                        setProfile({
-                          ...profile,
-                          availability: {
-                            ...profile.availability,
-                            [day]: {
-                              ...profile.availability[day],
-                              end: value,
-                            },
-                          },
-                        })
-                      }
-                      value={profile.availability[day].end}
-                      format="hh:mm a"
-                      clearIcon={null}
-                      clockIcon={null}
-                      disableClock={true}
-                      className="flex-1 min-w-[120px] text-lg"
-                    />
+                    <span className="font-medium w-full sm:w-28 text-center sm:text-left">
+                      {day}
+                    </span>
+
+                    {/* Time Inputs */}
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full sm:w-auto">
+                      {/* FROM */}
+                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto sm:mr-4">
+                        <span>From</span>
+                        <input
+                          type="time"
+                          value={profile.availability[day].start}
+                          onChange={(e) =>
+                            setProfile({
+                              ...profile,
+                              availability: {
+                                ...profile.availability,
+                                [day]: {
+                                  ...profile.availability[day],
+                                  start: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        />
+                      </div>
+
+                      {/* TO */}
+                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto">
+                        <span>To</span>
+                        <input
+                          type="time"
+                          value={profile.availability[day].end}
+                          onChange={(e) =>
+                            setProfile({
+                              ...profile,
+                              availability: {
+                                ...profile.availability,
+                                [day]: {
+                                  ...profile.availability[day],
+                                  end: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Credits */}
             <p className="text-yellow-600 font-semibold mb-6">
               Credits: {profile.credits}
             </p>
 
-            {/* Save Button */}
             <div className="w-full flex justify-end py-6">
               <Button onClick={saveProfile}>Save Changes</Button>
             </div>
@@ -232,7 +236,6 @@ export default function ProfilePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              {/* Learning Skills */}
               <div>
                 <h3 className="text-xl font-semibold mb-4">Learning Skills</h3>
                 <div className="space-y-2">
@@ -256,7 +259,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Teaching Skills */}
               <div>
                 <h3 className="text-xl font-semibold mb-4">Teaching Skills</h3>
                 <div className="space-y-2">
