@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router";
 import { Toaster } from "react-hot-toast";
-import Dashboard from "./Dashboard";
 
 import PrivateRoute from "./PrivateRoute";
 import LoginPage from "./LoginPage";
@@ -10,6 +9,8 @@ import VerifyCodePage from "./VerifyCodePage";
 import NotFoundPage from "./NotFoundPage";
 import PublicRoute from "./PublicRoute";
 import ResetPasswordPage from "./ResetPassword";
+import MainLayout from "./MainLayout";
+import SkillsPage from "./Skills";
 
 export default function App() {
   return (
@@ -25,7 +26,17 @@ export default function App() {
 
       <Routes>
         <Route element={<PrivateRoute requireVerified={true} />}>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route element={<PrivateRoute requireVerified={true} />}>
+            <Route element={<MainLayout />}>
+              <Route path="/sessions" element={<div>Sessions Page</div>} />
+              <Route
+                path="/appointments"
+                element={<div>Appointments Page</div>}
+              />
+              <Route path="/skills" element={<SkillsPage />} />
+              <Route path="/profile" element={<div>Profile Page</div>} />
+            </Route>
+          </Route>
         </Route>
 
         <Route element={<PrivateRoute requireVerified={false} />}>
