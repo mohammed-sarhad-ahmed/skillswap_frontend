@@ -1,34 +1,61 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Dialog } from "@headlessui/react";
 import { Trash2 } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
+import { API_BASE_URL } from "./Config";
+import { getToken } from "./ManageToken";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("information");
-  const [skills, setSkills] = useState([
-    { name: "JavaScript", type: "learning" },
-    { name: "React", type: "teaching" },
-  ]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillType, setNewSkillType] = useState("learning");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john@example.com",
-    credits: 120,
-    avatar: "/default-avatar.png",
-    availability: {
-      Monday: { start: "", end: "" },
-      Tuesday: { start: "", end: "" },
-      Wednesday: { start: "", end: "" },
-      Thursday: { start: "", end: "" },
-      Friday: { start: "", end: "" },
-      Saturday: { start: "", end: "" },
-      Sunday: { start: "", end: "" },
-    },
-  });
+  const [profile, setProfile] = useState(null);
+  const [skills, setSkills] = useState([]);
+
+  // Fetch profile + skills from backend
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = getToken();
+      if (!token) {
+        toast.error("Please login first.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/user/me`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to load profile");
+
+        setProfile(data.data.user);
+        const userSkills = [];
+        if (data.data.user.learningSkills)
+          data.data.user.learningSkills.forEach((s) =>
+            userSkills.push({ name: s, type: "learning" })
+          );
+        if (data.data.user.teachingSkills)
+          data.data.user.teachingSkills.forEach((s) =>
+            userSkills.push({ name: s, type: "teaching" })
+          );
+        setSkills(userSkills);
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleProfileChange = (field, value) => {
     setProfile({ ...profile, [field]: value });
@@ -42,34 +69,96 @@ export default function ProfilePage() {
     }
   };
 
-  const addSkill = () => {
-    if (!newSkillName) return;
-    setSkills([...skills, { name: newSkillName, type: newSkillType }]);
-    setNewSkillName("");
-    setNewSkillType("learning");
-    setIsModalOpen(false);
-  };
-
-  const deleteSkill = (index) => {
-    setSkills(skills.filter((_, i) => i !== index));
-  };
-
+  // Save profile info
   const saveProfile = async () => {
+    setSaving(true);
     try {
-      await fetch("/api/profile", {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/user/me`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify({ token, profile }),
       });
-      alert("Profile saved!");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to save profile");
+      toast.success("Profile saved!");
     } catch (err) {
-      console.error(err);
-      alert("Failed to save profile.");
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
+  // Add skill
+  const addSkill = async () => {
+    if (!newSkillName) return toast.error("Please enter skill name");
+    setSaving(true);
+    try {
+      const token = getToken();
+      const endpoint =
+        newSkillType === "learning" ? "learning-skill" : "teaching-Skill";
+      const res = await fetch(`${API_BASE_URL}/user/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, skill: newSkillName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to add skill");
+
+      toast.success(data.message);
+      setSkills([...skills, { name: newSkillName, type: newSkillType }]);
+      setNewSkillName("");
+      setIsModalOpen(false);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete skill
+  const deleteSkill = async (skill) => {
+    setSaving(true);
+    try {
+      const token = getToken();
+      const endpoint =
+        skill.type === "learning" ? "learning-skill" : "teaching-Skill";
+      const res = await fetch(`${API_BASE_URL}/user/${endpoint}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, skill: skill.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete skill");
+
+      toast.success(data.message);
+      setSkills(skills.filter((s) => s !== skill));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        <Toaster position="top-center" />
+      </div>
+    );
+
+  if (!profile)
+    return (
+      <div className="text-center mt-20 text-red-500">
+        Failed to load profile.
+        <Toaster position="top-center" />
+      </div>
+    );
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Toaster position="top-center" />
       {/* Tabs */}
       <div className="bg-white border-b shadow-sm flex flex-wrap justify-start gap-2 px-6 py-3">
         <Button
@@ -86,16 +175,15 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      {/* Page Content */}
       <div className="flex-1 w-full px-6 py-8 flex flex-col">
-        {/* INFORMATION TAB */}
+        {/* INFORMATION */}
         {activeTab === "information" && (
           <div className="max-w-3xl mx-auto flex flex-col items-center flex-1 w-full">
             <h2 className="text-3xl font-semibold text-gray-800 mb-8">
               Profile Information
             </h2>
 
-            {/* Profile Picture */}
+            {/* Avatar */}
             <div className="flex flex-col items-center mb-6">
               <div className="w-32 h-32 rounded-full bg-gray-200 overflow-hidden mb-3">
                 <img
@@ -120,8 +208,10 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Full Name</label>
                 <Input
-                  value={profile.name}
-                  onChange={(e) => handleProfileChange("name", e.target.value)}
+                  value={profile.fullName}
+                  onChange={(e) =>
+                    handleProfileChange("fullName", e.target.value)
+                  }
                   className="w-full"
                 />
               </div>
@@ -135,81 +225,19 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Availability */}
-            <div className="w-full mb-6">
-              <h3 className="text-xl font-semibold mb-4">Availability</h3>
-              <div className="flex flex-col gap-4">
-                {Object.keys(profile.availability).map((day) => (
-                  <div
-                    key={day}
-                    className="flex flex-col sm:flex-row sm:justify-between items-start gap-4 border rounded-lg p-3 bg-white w-full"
-                  >
-                    <span className="font-medium w-full sm:w-28 text-center sm:text-left">
-                      {day}
-                    </span>
-
-                    {/* Time Inputs */}
-                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full sm:w-auto">
-                      {/* FROM */}
-                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto sm:mr-4">
-                        <span>From</span>
-                        <input
-                          type="time"
-                          value={profile.availability[day].start}
-                          onChange={(e) =>
-                            setProfile({
-                              ...profile,
-                              availability: {
-                                ...profile.availability,
-                                [day]: {
-                                  ...profile.availability[day],
-                                  start: e.target.value,
-                                },
-                              },
-                            })
-                          }
-                          className="border rounded px-2 py-1 text-sm w-full"
-                        />
-                      </div>
-
-                      {/* TO */}
-                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto">
-                        <span>To</span>
-                        <input
-                          type="time"
-                          value={profile.availability[day].end}
-                          onChange={(e) =>
-                            setProfile({
-                              ...profile,
-                              availability: {
-                                ...profile.availability,
-                                [day]: {
-                                  ...profile.availability[day],
-                                  end: e.target.value,
-                                },
-                              },
-                            })
-                          }
-                          className="border rounded px-2 py-1 text-sm w-full"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <p className="text-yellow-600 font-semibold mb-6">
               Credits: {profile.credits}
             </p>
 
             <div className="w-full flex justify-end py-6">
-              <Button onClick={saveProfile}>Save Changes</Button>
+              <Button onClick={saveProfile} disabled={saving}>
+                Save Changes
+              </Button>
             </div>
           </div>
         )}
 
-        {/* MANAGE SKILLS TAB */}
+        {/* MANAGE SKILLS */}
         {activeTab === "manage" && (
           <div className="w-full max-w-6xl mx-auto flex-1">
             <h2 className="text-3xl font-semibold text-gray-800 mb-4">
@@ -250,7 +278,8 @@ export default function ProfilePage() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => deleteSkill(idx)}
+                          onClick={() => deleteSkill(skill)}
+                          disabled={saving}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -273,7 +302,8 @@ export default function ProfilePage() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => deleteSkill(idx)}
+                          onClick={() => deleteSkill(skill)}
+                          disabled={saving}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -305,7 +335,9 @@ export default function ProfilePage() {
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={addSkill}>Add</Button>
+              <Button onClick={addSkill} disabled={saving}>
+                Add
+              </Button>
             </div>
           </div>
         </Dialog>
