@@ -5,11 +5,14 @@ import { Dialog } from "@headlessui/react";
 import { Trash2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
-import { getToken } from "./ManageToken";
+import { getToken, removeToken } from "./ManageToken";
+import { useNavigate } from "react-router";
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("information");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillType, setNewSkillType] = useState("learning");
   const [loading, setLoading] = useState(true);
@@ -18,7 +21,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [skills, setSkills] = useState([]);
 
-  // Fetch profile + skills from backend
+  // Fetch profile + skills
   useEffect(() => {
     const fetchProfile = async () => {
       const token = getToken();
@@ -69,7 +72,7 @@ export default function ProfilePage() {
     }
   };
 
-  // ✅ Updated saveProfile using PATCH and FormData
+  // Save Profile
   const saveProfile = async () => {
     if (!profile) return;
     setSaving(true);
@@ -87,7 +90,7 @@ export default function ProfilePage() {
         },
       };
 
-      // If avatar is a File, send FormData
+      // If avatar is File, send FormData
       if (profile.avatar instanceof File) {
         endpoint = `${API_BASE_URL}/user/updateProfileAndPicture`;
         const formData = new FormData();
@@ -96,7 +99,6 @@ export default function ProfilePage() {
         formData.append("avatar", profile.avatar);
         options.body = formData;
       } else {
-        // No avatar change, send JSON
         const body = {};
         if (profile.fullName) body.fullName = profile.fullName;
         if (profile.email) body.email = profile.email;
@@ -115,6 +117,34 @@ export default function ProfilePage() {
       toast.error(err.message || "Profile update failed.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Delete Account
+  const deleteAccount = async () => {
+    setSaving(true);
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Not logged in.");
+
+      const res = await fetch(`${API_BASE_URL}/user/deleteMe`, {
+        method: "DELETE",
+        headers: { auth: token },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete account.");
+
+      toast.success("Account deleted successfully.");
+      removeToken();
+      setTimeout(() => {
+        navigate("/login"); // redirect home
+      }, 1000);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+      setIsDeleteModalOpen(false);
     }
   };
 
@@ -189,9 +219,8 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Toaster position="top-center" />
 
-      {/* Tabs with Credits on the Right */}
+      {/* Tabs with Credits */}
       <div className="bg-white border-b shadow-sm flex flex-wrap items-center justify-between px-6 py-3">
-        {/* Left side - Tabs */}
         <div className="flex gap-2">
           <Button
             variant={activeTab === "information" ? "default" : "ghost"}
@@ -206,8 +235,6 @@ export default function ProfilePage() {
             Manage Skills
           </Button>
         </div>
-
-        {/* Right side - Credits */}
         <div className="text-yellow-600 font-semibold">
           Credits: {profile.credits}
         </div>
@@ -245,7 +272,7 @@ export default function ProfilePage() {
               </label>
             </div>
 
-            {/* Name & Email */}
+            {/* Info Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Full Name</label>
@@ -267,7 +294,15 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="w-full flex justify-end py-6">
+            {/* Buttons: Delete left, Save right */}
+            <div className="w-full flex justify-between py-6">
+              <Button
+                variant="destructive"
+                onClick={() => setIsDeleteModalOpen(true)}
+                disabled={saving}
+              >
+                Delete Account
+              </Button>
               <Button onClick={saveProfile} disabled={saving}>
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
@@ -353,7 +388,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ADD SKILL MODAL */}
+        {/* Add Skill Modal */}
         <Dialog
           open={isModalOpen}
           onClose={() => setIsModalOpen(false)}
@@ -375,6 +410,38 @@ export default function ProfilePage() {
               </Button>
               <Button onClick={addSkill} disabled={saving}>
                 Add
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+
+        {/* Delete Account Modal */}
+        <Dialog
+          open={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+        >
+          <div className="bg-white rounded-lg p-6 w-80">
+            <Dialog.Title className="text-xl font-semibold mb-4 text-red-600">
+              Delete Account
+            </Dialog.Title>
+            <p className="mb-6">
+              Are you sure you want to delete your account? This action cannot
+              be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setIsDeleteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={deleteAccount}
+                disabled={saving}
+              >
+                Confirm Delete
               </Button>
             </div>
           </div>
