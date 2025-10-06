@@ -104,10 +104,6 @@ export default function ProfilePage() {
         options.body = JSON.stringify(body);
       }
 
-      // Debug
-      console.log("Request to:", endpoint);
-      console.log("Options:", options);
-
       const res = await fetch(endpoint, options);
       const data = await res.json();
 
@@ -192,20 +188,29 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Toaster position="top-center" />
-      {/* Tabs */}
-      <div className="bg-white border-b shadow-sm flex flex-wrap justify-start gap-2 px-6 py-3">
-        <Button
-          variant={activeTab === "information" ? "default" : "ghost"}
-          onClick={() => setActiveTab("information")}
-        >
-          Information
-        </Button>
-        <Button
-          variant={activeTab === "manage" ? "default" : "ghost"}
-          onClick={() => setActiveTab("manage")}
-        >
-          Manage Skills
-        </Button>
+
+      {/* Tabs with Credits on the Right */}
+      <div className="bg-white border-b shadow-sm flex flex-wrap items-center justify-between px-6 py-3">
+        {/* Left side - Tabs */}
+        <div className="flex gap-2">
+          <Button
+            variant={activeTab === "information" ? "default" : "ghost"}
+            onClick={() => setActiveTab("information")}
+          >
+            Information
+          </Button>
+          <Button
+            variant={activeTab === "manage" ? "default" : "ghost"}
+            onClick={() => setActiveTab("manage")}
+          >
+            Manage Skills
+          </Button>
+        </div>
+
+        {/* Right side - Credits */}
+        <div className="text-yellow-600 font-semibold">
+          Credits: {profile.credits}
+        </div>
       </div>
 
       <div className="flex-1 w-full px-6 py-8 flex flex-col">
@@ -222,8 +227,8 @@ export default function ProfilePage() {
                 <img
                   src={
                     profile.avatarPreview
-                      ? profile.avatarPreview // Use the selected file preview
-                      : `${API_BASE_URL}/user_avatar/${profile.avatar}` // fallback to backend
+                      ? profile.avatarPreview
+                      : `${API_BASE_URL}/user_avatar/${profile.avatar}`
                   }
                   alt="Profile"
                   className="w-full h-full object-cover"
@@ -261,10 +266,6 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-
-            <p className="text-yellow-600 font-semibold mb-6">
-              Credits: {profile.credits}
-            </p>
 
             <div className="w-full flex justify-end py-6">
               <Button onClick={saveProfile} disabled={saving}>
