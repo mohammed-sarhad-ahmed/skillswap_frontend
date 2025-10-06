@@ -64,26 +64,59 @@ export default function ProfilePage() {
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setProfile({ ...profile, avatar: url });
+      const previewUrl = URL.createObjectURL(file);
+      setProfile({ ...profile, avatar: file, avatarPreview: previewUrl });
     }
   };
 
-  // Save profile info
+  // ✅ Updated saveProfile using PATCH and FormData
   const saveProfile = async () => {
+    if (!profile) return;
     setSaving(true);
+
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/user/me`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, profile }),
-      });
+      if (!token)
+        throw new Error("You must be logged in to update your profile.");
+
+      let endpoint = `${API_BASE_URL}/user/me`;
+      let options = {
+        method: "PATCH",
+        headers: {
+          auth: token,
+        },
+      };
+
+      // If avatar is a File, send FormData
+      if (profile.avatar instanceof File) {
+        endpoint = `${API_BASE_URL}/user/updateProfileAndPicture`;
+        const formData = new FormData();
+        if (profile.fullName) formData.append("fullName", profile.fullName);
+        if (profile.email) formData.append("email", profile.email);
+        formData.append("avatar", profile.avatar);
+        options.body = formData;
+      } else {
+        // No avatar change, send JSON
+        const body = {};
+        if (profile.fullName) body.fullName = profile.fullName;
+        if (profile.email) body.email = profile.email;
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+
+      // Debug
+      console.log("Request to:", endpoint);
+      console.log("Options:", options);
+
+      const res = await fetch(endpoint, options);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to save profile");
-      toast.success("Profile saved!");
+
+      if (!res.ok) throw new Error(data.message || "Failed to update profile.");
+
+      toast.success("Profile updated successfully!");
+      setProfile(data.data.user);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "Profile update failed.");
     } finally {
       setSaving(false);
     }
@@ -187,7 +220,11 @@ export default function ProfilePage() {
             <div className="flex flex-col items-center mb-6">
               <div className="w-32 h-32 rounded-full bg-gray-200 overflow-hidden mb-3">
                 <img
-                  src={profile.avatar}
+                  src={
+                    profile.avatarPreview
+                      ? profile.avatarPreview // Use the selected file preview
+                      : `${API_BASE_URL}/user_avatar/${profile.avatar}` // fallback to backend
+                  }
                   alt="Profile"
                   className="w-full h-full object-cover"
                 />
@@ -231,7 +268,7 @@ export default function ProfilePage() {
 
             <div className="w-full flex justify-end py-6">
               <Button onClick={saveProfile} disabled={saving}>
-                Save Changes
+                {saving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>
