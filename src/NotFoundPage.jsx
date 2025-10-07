@@ -12,7 +12,7 @@ export default function NotFoundPage() {
         Oops... the page you’re looking for doesn’t exist or has been moved.
       </p>
       <button
-        onClick={() => navigate("/sessions")}
+        onClick={() => navigate("/skills")}
         className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-md hover:bg-blue-700 transition"
       >
         <Home size={20} />

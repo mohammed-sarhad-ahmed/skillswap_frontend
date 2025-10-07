@@ -33,7 +33,7 @@ export default function LoginPage() {
       saveToken(data.data.token);
       toast.success("Logged in successfully");
 
-      navigate("/dashboard");
+      navigate("/skills");
     } catch (err) {
       toast.error(err.message || "Login failed");
     } finally {
