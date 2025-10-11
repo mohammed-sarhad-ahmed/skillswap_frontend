@@ -36,7 +36,9 @@ export default function VerifyCodePage() {
 
       toast.success("Your account is now active!", { duration: 4000 });
       setCode("");
-      window.location.href = "/skills";
+      setTimeout(() => {
+        window.location.href = "/skills";
+      }, 2000);
     } catch (err) {
       toast.error(`${err.message}`);
     } finally {
@@ -66,7 +68,8 @@ export default function VerifyCodePage() {
     }
   };
 
-  // 🔹 Logout handler
+  // 🔹
+  //  handler
   const handleLogout = async () => {
     try {
       const token = getToken();
