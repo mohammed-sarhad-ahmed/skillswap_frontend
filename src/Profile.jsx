@@ -19,8 +19,10 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
 
   const [profile, setProfile] = useState(null);
+  const [originalProfile, setOriginalProfile] = useState(null);
   const [skills, setSkills] = useState([]);
 
+  // Fetch user profile on mount
   useEffect(() => {
     const fetchProfile = async () => {
       const token = getToken();
@@ -39,18 +41,19 @@ export default function ProfilePage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to load profile");
 
-        // Default availability if not provided
         const availability = data.data.user.availability || {
-          Monday: { start: "09:00", end: "17:00" },
-          Tuesday: { start: "09:00", end: "17:00" },
-          Wednesday: { start: "09:00", end: "17:00" },
-          Thursday: { start: "09:00", end: "17:00" },
-          Friday: { start: "09:00", end: "17:00" },
-          Saturday: { start: "09:00", end: "17:00" },
-          Sunday: { start: "09:00", end: "17:00" },
+          Monday: { start: "09:00", end: "17:00", off: false },
+          Tuesday: { start: "09:00", end: "17:00", off: false },
+          Wednesday: { start: "09:00", end: "17:00", off: false },
+          Thursday: { start: "09:00", end: "17:00", off: false },
+          Friday: { start: "09:00", end: "17:00", off: false },
+          Saturday: { start: "09:00", end: "17:00", off: false },
+          Sunday: { start: "09:00", end: "17:00", off: false },
         };
 
-        setProfile({ ...data.data.user, availability });
+        const fullProfile = { ...data.data.user, availability };
+        setProfile(fullProfile);
+        setOriginalProfile(fullProfile);
 
         const userSkills = [];
         if (data.data.user.learningSkills)
@@ -83,8 +86,32 @@ export default function ProfilePage() {
     }
   };
 
+  const hasChanges = () => {
+    if (!profile || !originalProfile) return false;
+
+    const keys = ["fullName", "email"];
+    for (const key of keys) {
+      if (profile[key] !== originalProfile[key]) return true;
+    }
+
+    for (const day of Object.keys(profile.availability)) {
+      const pDay = profile.availability[day];
+      const oDay = originalProfile.availability[day];
+      if (
+        pDay.off !== oDay.off ||
+        (!pDay.off && (pDay.start !== oDay.start || pDay.end !== oDay.end))
+      )
+        return true;
+    }
+
+    if (profile.avatar instanceof File) return true;
+
+    return false;
+  };
+
   const saveProfile = async () => {
     if (!profile) return;
+    if (!hasChanges()) return toast("No changes detected.", { icon: "ℹ️" });
     setSaving(true);
 
     try {
@@ -93,12 +120,7 @@ export default function ProfilePage() {
         throw new Error("You must be logged in to update your profile.");
 
       let endpoint = `${API_BASE_URL}/user/me`;
-      let options = {
-        method: "PATCH",
-        headers: {
-          auth: token,
-        },
-      };
+      let options = { method: "PATCH", headers: { auth: token } };
 
       if (profile.avatar instanceof File) {
         endpoint = `${API_BASE_URL}/user/updateProfileAndPicture`;
@@ -123,11 +145,21 @@ export default function ProfilePage() {
 
       toast.success("Profile updated successfully!");
       setProfile(data.data.user);
+      setOriginalProfile(data.data.user);
     } catch (err) {
       toast.error(err.message || "Profile update failed.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const cancelChanges = () => {
+    if (!hasChanges()) {
+      toast("No changes detected.", { icon: "ℹ️" });
+      return;
+    }
+    if (originalProfile) setProfile(originalProfile);
+    toast("Changes canceled.", { icon: "🛑" });
   };
 
   const deleteAccount = async () => {
@@ -299,81 +331,145 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Availability Time Picker */}
+            {/* Availability */}
             <div className="w-full mb-6">
               <h3 className="text-xl font-semibold mb-4">Availability</h3>
               <div className="flex flex-col gap-4 w-full">
-                {Object.keys(profile.availability).map((day) => (
-                  <div
-                    key={day}
-                    className="flex flex-col sm:flex-row sm:justify-between items-start gap-4 border rounded-lg p-3 bg-white w-full"
-                  >
-                    <span className="font-medium w-full sm:w-28 text-center sm:text-left mt-[3px]">
-                      {day}
-                    </span>
+                {Object.keys(profile.availability).map((day) => {
+                  const dayData = profile.availability[day];
+                  return (
+                    <div
+                      key={day}
+                      className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 border rounded-lg p-3 bg-white w-full"
+                    >
+                      <span className="font-medium w-full sm:w-28 text-center sm:text-left">
+                        {day}
+                      </span>
 
-                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full sm:w-auto">
-                      {/* FROM */}
-                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto sm:mr-4">
-                        <span className="mt-[3px]">From</span>
-                        <input
-                          type="time"
-                          value={profile.availability[day].start}
-                          onChange={(e) =>
-                            setProfile({
-                              ...profile,
-                              availability: {
-                                ...profile.availability,
-                                [day]: {
-                                  ...profile.availability[day],
-                                  start: e.target.value,
-                                },
-                              },
-                            })
-                          }
-                          className="border rounded px-2 py-1 text-sm w-full"
-                        />
-                      </div>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                        {!dayData.off && (
+                          <>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <span className="min-w-[40px] text-sm">From</span>
+                              <input
+                                type="time"
+                                value={dayData.start}
+                                onChange={(e) =>
+                                  setProfile({
+                                    ...profile,
+                                    availability: {
+                                      ...profile.availability,
+                                      [day]: {
+                                        ...dayData,
+                                        start: e.target.value,
+                                      },
+                                    },
+                                  })
+                                }
+                                className="border rounded px-2 py-1 text-sm w-full sm:w-auto"
+                              />
+                            </div>
 
-                      {/* TO */}
-                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto">
-                        <span className="mt-[3px]">To</span>
-                        <input
-                          type="time"
-                          value={profile.availability[day].end}
-                          onChange={(e) =>
-                            setProfile({
-                              ...profile,
-                              availability: {
-                                ...profile.availability,
-                                [day]: {
-                                  ...profile.availability[day],
-                                  end: e.target.value,
-                                },
-                              },
-                            })
-                          }
-                          className="border rounded px-2 py-1 text-sm w-full"
-                        />
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <span className="min-w-[30px] text-sm">To</span>
+                              <input
+                                type="time"
+                                value={dayData.end}
+                                onChange={(e) =>
+                                  setProfile({
+                                    ...profile,
+                                    availability: {
+                                      ...profile.availability,
+                                      [day]: {
+                                        ...dayData,
+                                        end: e.target.value,
+                                      },
+                                    },
+                                  })
+                                }
+                                className="border rounded px-2 py-1 text-sm w-full sm:w-auto"
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {/* Day Off Toggle */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={dayData.off || false}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setProfile({
+                                  ...profile,
+                                  availability: {
+                                    ...profile.availability,
+                                    [day]: {
+                                      off: true,
+                                      start: dayData.start,
+                                      end: dayData.end,
+                                    },
+                                  },
+                                });
+                              } else {
+                                const prevDay =
+                                  originalProfile.availability[day];
+                                setProfile({
+                                  ...profile,
+                                  availability: {
+                                    ...profile.availability,
+                                    [day]: {
+                                      off: false,
+                                      start: prevDay.start || "09:00",
+                                      end: prevDay.end || "17:00",
+                                    },
+                                  },
+                                });
+                              }
+                            }}
+                            className="w-5 h-5 accent-blue-600 rounded"
+                          />
+                          <span className="text-sm">Day Off</span>
+                        </label>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Buttons */}
-            <div className="w-full flex justify-between py-6">
+            {/* Buttons */}
+            <div className="w-full flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 py-6">
               <Button
                 variant="destructive"
                 onClick={() => setIsDeleteModalOpen(true)}
                 disabled={saving}
+                className="w-full sm:w-auto"
               >
                 Delete Account
               </Button>
-              <Button onClick={saveProfile} disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
-              </Button>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Button
+                  onClick={cancelChanges}
+                  disabled={saving || !hasChanges()}
+                  className="w-full sm:w-auto"
+                >
+                  {hasChanges() ? "Cancel Changes" : "No changes detected"}
+                </Button>
+                <Button
+                  onClick={saveProfile}
+                  disabled={saving || !hasChanges()}
+                  className="w-full sm:w-auto"
+                >
+                  {saving
+                    ? "Saving..."
+                    : hasChanges()
+                    ? "Save Changes"
+                    : "No changes detected"}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -472,7 +568,7 @@ export default function ProfilePage() {
               onChange={(e) => setNewSkillName(e.target.value)}
               className="mb-4"
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
@@ -497,7 +593,7 @@ export default function ProfilePage() {
               Are you sure you want to delete your account? This action cannot
               be undone.
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <Button
                 variant="secondary"
                 onClick={() => setIsDeleteModalOpen(false)}
