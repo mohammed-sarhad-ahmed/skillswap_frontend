@@ -21,7 +21,6 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [skills, setSkills] = useState([]);
 
-  // Fetch profile + skills
   useEffect(() => {
     const fetchProfile = async () => {
       const token = getToken();
@@ -40,7 +39,19 @@ export default function ProfilePage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to load profile");
 
-        setProfile(data.data.user);
+        // Default availability if not provided
+        const availability = data.data.user.availability || {
+          Monday: { start: "09:00", end: "17:00" },
+          Tuesday: { start: "09:00", end: "17:00" },
+          Wednesday: { start: "09:00", end: "17:00" },
+          Thursday: { start: "09:00", end: "17:00" },
+          Friday: { start: "09:00", end: "17:00" },
+          Saturday: { start: "09:00", end: "17:00" },
+          Sunday: { start: "09:00", end: "17:00" },
+        };
+
+        setProfile({ ...data.data.user, availability });
+
         const userSkills = [];
         if (data.data.user.learningSkills)
           data.data.user.learningSkills.forEach((s) =>
@@ -72,7 +83,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Save Profile
   const saveProfile = async () => {
     if (!profile) return;
     setSaving(true);
@@ -90,25 +100,25 @@ export default function ProfilePage() {
         },
       };
 
-      // If avatar is File, send FormData
       if (profile.avatar instanceof File) {
         endpoint = `${API_BASE_URL}/user/updateProfileAndPicture`;
         const formData = new FormData();
         if (profile.fullName) formData.append("fullName", profile.fullName);
         if (profile.email) formData.append("email", profile.email);
         formData.append("avatar", profile.avatar);
+        formData.append("availability", JSON.stringify(profile.availability));
         options.body = formData;
       } else {
         const body = {};
         if (profile.fullName) body.fullName = profile.fullName;
         if (profile.email) body.email = profile.email;
+        if (profile.availability) body.availability = profile.availability;
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
       }
 
       const res = await fetch(endpoint, options);
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.message || "Failed to update profile.");
 
       toast.success("Profile updated successfully!");
@@ -120,7 +130,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Delete Account
   const deleteAccount = async () => {
     setSaving(true);
     try {
@@ -137,9 +146,7 @@ export default function ProfilePage() {
 
       toast.success("Account deleted successfully.");
       removeToken();
-      setTimeout(() => {
-        navigate("/login"); // redirect home
-      }, 1000);
+      setTimeout(() => navigate("/login"), 1000);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -148,7 +155,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Add skill
   const addSkill = async () => {
     if (!newSkillName) return toast.error("Please enter skill name");
     setSaving(true);
@@ -175,7 +181,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Delete skill
   const deleteSkill = async (skill) => {
     setSaving(true);
     try {
@@ -219,9 +224,9 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Toaster position="top-center" />
 
-      {/* Tabs with Credits */}
-      <div className="bg-white border-b shadow-sm flex flex-wrap items-center justify-between px-6 py-3">
-        <div className="flex gap-2">
+      {/* Tabs and Credits */}
+      <div className="bg-white border-b shadow-sm px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex justify-between w-full sm:w-auto gap-2">
           <Button
             variant={activeTab === "information" ? "default" : "ghost"}
             onClick={() => setActiveTab("information")}
@@ -235,13 +240,13 @@ export default function ProfilePage() {
             Manage Skills
           </Button>
         </div>
-        <div className="text-yellow-600 font-semibold">
+        <div className="text-yellow-600 font-semibold text-center mt-2 sm:mt-0 sm:text-right">
           Credits: {profile.credits}
         </div>
       </div>
 
       <div className="flex-1 w-full px-6 py-8 flex flex-col">
-        {/* INFORMATION */}
+        {/* INFORMATION TAB */}
         {activeTab === "information" && (
           <div className="max-w-3xl mx-auto flex flex-col items-center flex-1 w-full">
             <h2 className="text-3xl font-semibold text-gray-800 mb-8">
@@ -294,7 +299,70 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Buttons: Delete left, Save right */}
+            {/* Availability Time Picker */}
+            <div className="w-full mb-6">
+              <h3 className="text-xl font-semibold mb-4">Availability</h3>
+              <div className="flex flex-col gap-4 w-full">
+                {Object.keys(profile.availability).map((day) => (
+                  <div
+                    key={day}
+                    className="flex flex-col sm:flex-row sm:justify-between items-start gap-4 border rounded-lg p-3 bg-white w-full"
+                  >
+                    <span className="font-medium w-full sm:w-28 text-center sm:text-left mt-[3px]">
+                      {day}
+                    </span>
+
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full sm:w-auto">
+                      {/* FROM */}
+                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto sm:mr-4">
+                        <span className="mt-[3px]">From</span>
+                        <input
+                          type="time"
+                          value={profile.availability[day].start}
+                          onChange={(e) =>
+                            setProfile({
+                              ...profile,
+                              availability: {
+                                ...profile.availability,
+                                [day]: {
+                                  ...profile.availability[day],
+                                  start: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        />
+                      </div>
+
+                      {/* TO */}
+                      <div className="flex flex-col sm:flex-row items-start gap-1 w-full sm:w-auto">
+                        <span className="mt-[3px]">To</span>
+                        <input
+                          type="time"
+                          value={profile.availability[day].end}
+                          onChange={(e) =>
+                            setProfile({
+                              ...profile,
+                              availability: {
+                                ...profile.availability,
+                                [day]: {
+                                  ...profile.availability[day],
+                                  end: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Buttons */}
             <div className="w-full flex justify-between py-6">
               <Button
                 variant="destructive"
@@ -310,7 +378,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* MANAGE SKILLS */}
+        {/* MANAGE SKILLS TAB */}
         {activeTab === "manage" && (
           <div className="w-full max-w-6xl mx-auto flex-1">
             <h2 className="text-3xl font-semibold text-gray-800 mb-4">
