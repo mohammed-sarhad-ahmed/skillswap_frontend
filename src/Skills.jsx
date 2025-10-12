@@ -39,7 +39,6 @@ export default function SkillsPage() {
 
   const usersPerPage = 8;
 
-  // Fetch all users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -56,12 +55,9 @@ export default function SkillsPage() {
     fetchUsers();
   }, []);
 
-  // Helper: get weekday name from Date
-  const getWeekday = (date) => {
-    return date.toLocaleDateString("en-US", { weekday: "long" });
-  };
+  const getWeekday = (date) =>
+    date.toLocaleDateString("en-US", { weekday: "long" });
 
-  // Generate time slots between start & end every 30 mins
   const generateTimeSlots = (start, end) => {
     const times = [];
     let [h, m] = start.split(":").map(Number);
@@ -80,11 +76,21 @@ export default function SkillsPage() {
     return times;
   };
 
-  // Handle date selection
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    if (!selectedUser || !selectedUser.availability) return;
+  const isDateDisabled = (date) => {
+    if (!selectedUser || !selectedUser.availability) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) return true;
+    const weekday = getWeekday(date);
+    const dayData = selectedUser.availability[weekday];
+    return !dayData || dayData.off;
+  };
 
+  const handleDateSelect = (date) => {
+    if (isDateDisabled(date)) return;
+    setSelectedDate(date);
+
+    if (!selectedUser?.availability) return;
     const weekday = getWeekday(date);
     const dayData = selectedUser.availability[weekday];
 
@@ -121,10 +127,9 @@ export default function SkillsPage() {
   const filteredUsers = users.filter(
     (user) =>
       user.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      (user.skills &&
-        user.skills.some((skill) =>
-          skill.toLowerCase().includes(search.toLowerCase())
-        ))
+      user.skills?.some((skill) =>
+        skill.toLowerCase().includes(search.toLowerCase())
+      )
   );
 
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
@@ -142,8 +147,8 @@ export default function SkillsPage() {
     <>
       <Toaster />
       {/* Search Bar */}
-      <div className="px-4 sm:px-6 md:px-0 mb-6 flex justify-center mx-6">
-        <div className="md:w-auto flex-1">
+      <div className="px-4 sm:px-6 md:px-0 mb-6 flex justify-center w-full">
+        <div className="w-full max-w-xl">
           <Input
             placeholder="Search by name or skill..."
             value={search}
@@ -151,19 +156,19 @@ export default function SkillsPage() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition w-full"
           />
         </div>
       </div>
 
       {/* User Cards */}
       <div className="flex flex-col min-h-screen p-4 md:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentUsers.length > 0 ? (
             currentUsers.map((user) => (
               <Card
                 key={user._id}
-                className="flex flex-col items-center text-center p-6 justify-between h-full rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
+                className="flex flex-col items-center text-center p-6 justify-between h-full rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800 w-full"
               >
                 <div className="flex flex-col items-center space-y-3">
                   <img
@@ -237,7 +242,7 @@ export default function SkillsPage() {
 
       {/* Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               Connect with {selectedUser?.fullName || "Teacher"}
@@ -251,7 +256,8 @@ export default function SkillsPage() {
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDateSelect}
-                className="rounded-md border shadow-sm"
+                className="rounded-md border shadow-sm w-full"
+                disabled={isDateDisabled}
               />
             </div>
 
@@ -266,7 +272,7 @@ export default function SkillsPage() {
                       onValueChange={setSelectedTime}
                       value={selectedTime}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a time" />
                       </SelectTrigger>
                       <SelectContent>
@@ -287,7 +293,7 @@ export default function SkillsPage() {
             )}
           </div>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
