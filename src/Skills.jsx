@@ -111,17 +111,38 @@ export default function SkillsPage() {
     setOpen(true);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) {
       toast.error("Please select both a date and time");
       return;
     }
-    toast.success(
-      `Connected with ${
-        selectedUser.fullName
-      } on ${selectedDate.toDateString()} at ${selectedTime}`
-    );
-    setOpen(false);
+
+    if (!selectedUser?._id) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          auth: getToken(),
+        },
+        body: JSON.stringify({
+          teacher: selectedUser._id,
+          date: selectedDate.toISOString().split("T")[0],
+          time: selectedTime,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok)
+        throw new Error(data.message || "Failed to book appointment");
+
+      toast.success(`Appointment confirmed with ${selectedUser.fullName}`);
+      setOpen(false);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const filteredUsers = users.filter(
@@ -298,7 +319,7 @@ export default function SkillsPage() {
               Cancel
             </Button>
             <Button onClick={handleConfirm} disabled={!selectedTime}>
-              Confirm Appointment
+              Make Appointment
             </Button>
           </DialogFooter>
         </DialogContent>
