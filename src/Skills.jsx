@@ -99,7 +99,19 @@ export default function SkillsPage() {
       return;
     }
 
-    const times = generateTimeSlots(dayData.start, dayData.end);
+    let times = generateTimeSlots(dayData.start, dayData.end);
+
+    // 🕒 Filter out past times if the selected date is today
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      times = times.filter((time) => {
+        const [h, m] = time.split(":").map(Number);
+        const totalMinutes = h * 60 + m;
+        return totalMinutes > currentMinutes;
+      });
+    }
+
     setAvailableTimes(times);
   };
 
@@ -145,13 +157,16 @@ export default function SkillsPage() {
     }
   };
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      user.skills?.some((skill) =>
+  // ✅ FIXED: support both teachingSkills and skills
+  const filteredUsers = users.filter((user) => {
+    const allSkills = user.teachingSkills || user.skills || [];
+    return (
+      user.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      allSkills.some((skill) =>
         skill.toLowerCase().includes(search.toLowerCase())
       )
-  );
+    );
+  });
 
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
   const startIndex = (currentPage - 1) * usersPerPage;
@@ -167,9 +182,10 @@ export default function SkillsPage() {
   return (
     <>
       <Toaster />
-      {/* Search Bar */}
+
+      {/* 🔎 Search Bar */}
       <div className="px-4 sm:px-6 md:px-0 mb-6 flex justify-center w-full">
-        <div className="w-full max-w-xl">
+        <div className="w-full max-w-xl mx-2.5">
           <Input
             placeholder="Search by name or skill..."
             value={search}
@@ -182,7 +198,7 @@ export default function SkillsPage() {
         </div>
       </div>
 
-      {/* User Cards */}
+      {/* 👥 User Cards */}
       <div className="flex flex-col min-h-screen p-4 md:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentUsers.length > 0 ? (
@@ -205,14 +221,16 @@ export default function SkillsPage() {
                   <CardContent className="p-0">
                     <CardDescription>
                       <div className="flex flex-wrap gap-2 justify-center mt-2">
-                        {user.teachingSkills?.map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="bg-gradient-to-r from-blue-400 to-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
-                          >
-                            {skill}
-                          </span>
-                        ))}
+                        {(user.teachingSkills || user.skills || []).map(
+                          (skill, idx) => (
+                            <span
+                              key={idx}
+                              className="bg-gradient-to-r from-blue-400 to-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
+                            >
+                              {skill}
+                            </span>
+                          )
+                        )}
                       </div>
                     </CardDescription>
                   </CardContent>
@@ -233,7 +251,7 @@ export default function SkillsPage() {
           )}
         </div>
 
-        {/* Pagination */}
+        {/* 📄 Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-wrap justify-center mt-6 gap-2">
             <Button
@@ -261,11 +279,11 @@ export default function SkillsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* 🗓️ Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-full sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="pt-10">
               Connect with {selectedUser?.fullName || "Teacher"}
             </DialogTitle>
           </DialogHeader>

@@ -21,9 +21,9 @@ import {
 } from "./components/ui/sidebar";
 
 import { NavLink, useNavigate } from "react-router";
-import toast from "react-hot-toast";
 
 import { getToken, removeToken } from "./ManageToken";
+import { useEffect } from "react";
 
 const navItems = [
   { title: "Sessions", to: "/sessions", icon: ClipboardList },
@@ -34,6 +34,8 @@ const navItems = [
 
 export default function AppSidebar() {
   const navigate = useNavigate();
+
+  useEffect(() => {}, []);
 
   const handleLogout = async () => {
     try {
@@ -54,13 +56,12 @@ export default function AppSidebar() {
       }
 
       removeToken();
-      toast.success("Logged out successfully");
-      navigate("/login");
+      SidebarGroup;
+      location.href = "/login";
     } catch (err) {
       console.error("Logout failed:", err);
       removeToken();
-      toast.error("Logout failed, but session cleared");
-      navigate("/login");
+      location.href = "/login";
     }
   };
 

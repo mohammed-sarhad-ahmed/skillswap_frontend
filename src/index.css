@@ -118,3 +118,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* For devices smaller than 340px */
+@media (max-width: 350px) {
+  .change-profile-px {
+    padding-inline: 0.5rem; /* shorthand for left and right */
+  }
+}
+
+@media (max-width: 330px) {
+  .change-profile-px {
+    padding-inline: 0.3rem; /* shorthand for left and right */
+  }
+}
+
+@media (max-width: 319px) {
+  .change-profile-px {
+    padding-inline: 0rem; /* shorthand for left and right */
+  }
+}

@@ -277,7 +277,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="flex-1 w-full px-6 py-8 flex flex-col">
+      <div className="flex-1 w-full px-6 change-profile-px py-8 flex flex-col">
         {/* INFORMATION TAB */}
         {activeTab === "information" && (
           <div className="max-w-3xl mx-auto flex flex-col items-center flex-1 w-full">
@@ -346,7 +346,7 @@ export default function ProfilePage() {
                         {day}
                       </span>
 
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                      <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
                         {!dayData.off && (
                           <>
                             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -371,7 +371,7 @@ export default function ProfilePage() {
                             </div>
 
                             <div className="flex items-center gap-2 w-full sm:w-auto">
-                              <span className="min-w-[30px] text-sm">To</span>
+                              <span className="min-w-[40px] text-sm">To</span>
                               <input
                                 type="time"
                                 value={dayData.end}
@@ -476,12 +476,12 @@ export default function ProfilePage() {
 
         {/* MANAGE SKILLS TAB */}
         {activeTab === "manage" && (
-          <div className="w-full max-w-6xl mx-auto flex-1">
+          <div className="w-full max-w-6xl mx-auto flex-1 change-manage-px">
             <h2 className="text-3xl font-semibold text-gray-800 mb-4">
               Manage Skills
             </h2>
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 ">
               <Button
                 onClick={() => {
                   setNewSkillType("learning");

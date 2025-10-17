@@ -23,18 +23,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "./components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
 
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  const [userId, setUserId] = useState(null);
   const [openModal, setOpenModal] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [newDate, setNewDate] = useState(null);
   const [availableTimes, setAvailableTimes] = useState([]);
   const [newTime, setNewTime] = useState("");
+  const [activeTab, setActiveTab] = useState("requested");
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -45,7 +47,24 @@ export default function AppointmentsPage() {
       const data = await res.json();
       if (!res.ok)
         throw new Error(data.message || "Failed to fetch appointments");
-      setAppointments(data.data);
+
+      const now = new Date();
+      const updatedAppointments = await Promise.all(
+        data.data.map(async (appt) => {
+          const apptDate = new Date(`${appt.date}T${appt.time}`);
+          if (appt.status === "pending" && apptDate < now) {
+            await fetch(`${API_BASE_URL}/appointments/${appt._id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", auth: getToken() },
+              body: JSON.stringify({ status: "canceled" }),
+            });
+            return { ...appt, status: "canceled" };
+          }
+          return appt;
+        })
+      );
+
+      setAppointments(updatedAppointments);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -53,7 +72,24 @@ export default function AppointmentsPage() {
     }
   };
 
+  const fetchUser = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/me`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          auth: getToken(),
+        },
+      });
+      const data = await res.json();
+      if (res.ok) setUserId(data.data.user._id);
+    } catch (err) {
+      toast.error("Failed to fetch user info");
+    }
+  };
+
   useEffect(() => {
+    fetchUser();
     fetchAppointments();
   }, []);
 
@@ -64,7 +100,6 @@ export default function AppointmentsPage() {
     const times = [];
     let [h, m] = start.split(":").map(Number);
     let [endH, endM] = end.split(":").map(Number);
-
     while (h < endH || (h === endH && m < endM)) {
       const hh = String(h).padStart(2, "0");
       const mm = String(m).padStart(2, "0");
@@ -83,7 +118,6 @@ export default function AppointmentsPage() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (date < today) return true;
-
     const weekday = getWeekday(date);
     const dayData = selectedAppt.teacher.availability[weekday];
     return !dayData || dayData.off;
@@ -92,15 +126,12 @@ export default function AppointmentsPage() {
   const handleDateSelect = (date) => {
     if (isDateDisabled(date)) return;
     setNewDate(date);
-
     const weekday = getWeekday(date);
     const dayData = selectedAppt.teacher.availability[weekday];
-
     if (!dayData || dayData.off) {
       setAvailableTimes([]);
       return;
     }
-
     const times = generateTimeSlots(dayData.start, dayData.end);
     setAvailableTimes(times);
   };
@@ -109,10 +140,7 @@ export default function AppointmentsPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/appointments/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          auth: getToken(),
-        },
+        headers: { "Content-Type": "application/json", auth: getToken() },
         body: JSON.stringify({ status: "confirmed" }),
       });
       const data = await res.json();
@@ -128,10 +156,7 @@ export default function AppointmentsPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/appointments/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          auth: getToken(),
-        },
+        headers: { "Content-Type": "application/json", auth: getToken() },
         body: JSON.stringify({ status: "canceled" }),
       });
       const data = await res.json();
@@ -147,7 +172,7 @@ export default function AppointmentsPage() {
     setSelectedAppt(appt);
     setNewDate(new Date(appt.date));
     setNewTime(appt.time);
-    setAvailableTimes([]); // will populate based on teacher availability
+    setAvailableTimes([]);
     setOpenModal(true);
   };
 
@@ -156,10 +181,9 @@ export default function AppointmentsPage() {
       toast.error("Please select both a new date and time");
       return;
     }
-
     try {
       const res = await fetch(
-        `${API_BASE_URL}/appointments/${selectedAppt._id}`,
+        `${API_BASE_URL}/appointments/change-schedule/${selectedAppt._id}`,
         {
           method: "PATCH",
           headers: {
@@ -169,22 +193,133 @@ export default function AppointmentsPage() {
           body: JSON.stringify({
             date: newDate,
             time: newTime,
-            status: "pending",
+            status: selectedAppt.status, // keep current status
           }),
         }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to reschedule");
+
       toast.success("Appointment rescheduled");
       setOpenModal(false);
-      fetchAppointments();
+      fetchAppointments(); // rerender appointments list
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  if (loading)
+  if (loading || userId === null)
     return <p className="text-center mt-6">Loading appointments...</p>;
+
+  const requestedAppointments = appointments.filter(
+    (a) => a.student._id === userId
+  );
+  const receivedAppointments = appointments.filter(
+    (a) => a.teacher._id === userId
+  );
+
+  const renderCards = (list, isTeacherView) =>
+    list.length === 0 ? (
+      <p className="text-center text-gray-500 mt-8">No appointments found.</p>
+    ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {list.map((appt) => (
+          <Card
+            key={appt._id}
+            className="flex flex-col justify-between p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
+          >
+            <CardHeader className="flex items-center gap-4 p-0">
+              <img
+                src={`${API_BASE_URL}/user_avatar/${
+                  isTeacherView ? appt.student.avatar : appt.teacher.avatar
+                }`}
+                alt={
+                  isTeacherView ? appt.student.fullName : appt.teacher.fullName
+                }
+                className="w-16 h-16 rounded-full object-cover border-2 border-blue-500"
+              />
+              <CardTitle className="text-lg font-semibold">
+                {isTeacherView ? appt.student.fullName : appt.teacher.fullName}
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="p-0 mt-2">
+              <CardDescription>
+                <p>
+                  <strong>Date:</strong> {new Date(appt.date).toDateString()}
+                </p>
+                <p>
+                  <strong>Time:</strong> {appt.time}
+                </p>
+                <p>
+                  <strong>Status:</strong>{" "}
+                  <span
+                    className={`font-semibold ${
+                      appt.status === "pending"
+                        ? "text-yellow-500"
+                        : appt.status === "confirmed"
+                        ? "text-green-500"
+                        : "text-red-500"
+                    }`}
+                  >
+                    {appt.status.toUpperCase()}
+                  </span>
+                </p>
+              </CardDescription>
+            </CardContent>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {/* Teacher: Pending -> Confirm + Cancel + Reschedule */}
+              {isTeacherView && appt.status === "pending" && (
+                <>
+                  <Button
+                    className="bg-green-500 hover:bg-green-600 text-white flex-1 min-w-[120px]"
+                    onClick={() => handleConfirm(appt._id)}
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[120px]"
+                    onClick={() => handleCancel(appt._id)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px]"
+                    onClick={() => handleRescheduleClick(appt)}
+                  >
+                    Reschedule
+                  </Button>
+                </>
+              )}
+
+              {/* Teachers & Students: Confirmed OR Pending (student) -> Cancel + Reschedule */}
+              {(appt.status === "confirmed" ||
+                (!isTeacherView && appt.status === "pending")) && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[120px]"
+                    onClick={() => handleCancel(appt._id)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px]"
+                    onClick={() => handleRescheduleClick(appt)}
+                  >
+                    Reschedule
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
 
   return (
     <>
@@ -192,83 +327,20 @@ export default function AppointmentsPage() {
       <div className="p-4 md:p-6">
         <h1 className="text-2xl font-semibold mb-6">My Appointments</h1>
 
-        {appointments.length === 0 && (
-          <p className="text-center text-gray-500 mt-8">
-            No appointments found.
-          </p>
-        )}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="flex justify-center mb-6">
+            <TabsTrigger value="received">Received from Students</TabsTrigger>
+            <TabsTrigger value="requested">Requested by Me</TabsTrigger>
+          </TabsList>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {appointments.map((appt) => (
-            <Card
-              key={appt._id}
-              className="flex flex-col justify-between p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
-            >
-              <CardHeader className="flex items-center gap-4 p-0">
-                <img
-                  src={`${API_BASE_URL}/user_avatar/${appt.teacher.avatar}`}
-                  alt={appt.teacher.fullName}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-blue-500"
-                />
-                <CardTitle className="text-lg font-semibold">
-                  {appt.teacher.fullName}
-                </CardTitle>
-              </CardHeader>
+          <TabsContent value="received">
+            {renderCards(receivedAppointments, true)}
+          </TabsContent>
 
-              <CardContent className="p-0 mt-2">
-                <CardDescription>
-                  <p>
-                    <strong>Date:</strong> {new Date(appt.date).toDateString()}
-                  </p>
-                  <p>
-                    <strong>Time:</strong> {appt.time}
-                  </p>
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    <span
-                      className={`font-semibold ${
-                        appt.status === "pending"
-                          ? "text-yellow-500"
-                          : appt.status === "confirmed"
-                          ? "text-green-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {appt.status.toUpperCase()}
-                    </span>
-                  </p>
-                </CardDescription>
-              </CardContent>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {appt.status === "pending" && (
-                  <>
-                    <Button
-                      className="bg-green-500 hover:bg-green-600 text-white flex-1 min-w-[120px] sm:min-w-[140px]"
-                      onClick={() => handleConfirm(appt._id)}
-                    >
-                      Confirm
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[120px] sm:min-w-[140px]"
-                      onClick={() => handleCancel(appt._id)}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="outline"
-                  className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px] sm:min-w-[140px]"
-                  onClick={() => handleRescheduleClick(appt)}
-                >
-                  Reschedule
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+          <TabsContent value="requested">
+            {renderCards(requestedAppointments, false)}
+          </TabsContent>
+        </Tabs>
 
         {/* Reschedule Modal */}
         <Dialog open={openModal} onOpenChange={setOpenModal}>
@@ -291,33 +363,30 @@ export default function AppointmentsPage() {
                 />
               </div>
 
-              {newDate && (
-                <>
-                  {availableTimes.length > 0 ? (
-                    <div>
-                      <label className="font-medium mb-2 block">
-                        Available Times
-                      </label>
-                      <Select onValueChange={setNewTime} value={newTime}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTimes.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      Teacher is not available on this day.
-                    </p>
-                  )}
-                </>
-              )}
+              {newDate &&
+                (availableTimes.length > 0 ? (
+                  <div>
+                    <label className="font-medium mb-2 block">
+                      Available Times
+                    </label>
+                    <Select onValueChange={setNewTime} value={newTime}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTimes.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    Teacher is not available on this day.
+                  </p>
+                ))}
             </div>
 
             <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
