@@ -89,7 +89,7 @@ export default function ProfilePage() {
   const hasChanges = () => {
     if (!profile || !originalProfile) return false;
 
-    const keys = ["fullName", "email"];
+    const keys = ["fullName", "email", "balance"];
     for (const key of keys) {
       if (profile[key] !== originalProfile[key]) return true;
     }
@@ -127,6 +127,8 @@ export default function ProfilePage() {
         const formData = new FormData();
         if (profile.fullName) formData.append("fullName", profile.fullName);
         if (profile.email) formData.append("email", profile.email);
+        if (profile.balance !== undefined)
+          formData.append("balance", profile.balance);
         formData.append("avatar", profile.avatar);
         formData.append("availability", JSON.stringify(profile.availability));
         options.body = formData;
@@ -134,6 +136,7 @@ export default function ProfilePage() {
         const body = {};
         if (profile.fullName) body.fullName = profile.fullName;
         if (profile.email) body.email = profile.email;
+        if (profile.balance !== undefined) body.balance = profile.balance;
         if (profile.availability) body.availability = profile.availability;
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
@@ -321,11 +324,27 @@ export default function ProfilePage() {
                   className="w-full"
                 />
               </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Email</label>
                 <Input
                   value={profile.email}
                   onChange={(e) => handleProfileChange("email", e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Balance Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Balance</label>
+                <Input
+                  type="number"
+                  value={profile.balance ?? 0}
+                  onChange={(e) => {
+                    let val = parseFloat(e.target.value);
+                    if (isNaN(val) || val < 0) val = 0; // Prevent negative
+                    handleProfileChange("balance", val);
+                  }}
                   className="w-full"
                 />
               </div>
@@ -439,7 +458,6 @@ export default function ProfilePage() {
             </div>
 
             {/* Buttons */}
-            {/* Buttons */}
             <div className="w-full flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 py-6">
               <Button
                 variant="destructive"
@@ -506,19 +524,19 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   {skills
                     .filter((s) => s.type === "learning")
-                    .map((skill, idx) => (
+                    .map((s, i) => (
                       <div
-                        key={idx}
-                        className="flex justify-between items-center border rounded-lg px-3 py-2 bg-white"
+                        key={i}
+                        className="flex items-center justify-between bg-white shadow px-4 py-2 rounded-lg"
                       >
-                        <span>{skill.name}</span>
+                        <span>{s.name}</span>
                         <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteSkill(skill)}
-                          disabled={saving}
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteSkill(s)}
+                          className="text-red-500 hover:text-red-700"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
@@ -530,19 +548,19 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   {skills
                     .filter((s) => s.type === "teaching")
-                    .map((skill, idx) => (
+                    .map((s, i) => (
                       <div
-                        key={idx}
-                        className="flex justify-between items-center border rounded-lg px-3 py-2 bg-white"
+                        key={i}
+                        className="flex items-center justify-between bg-white shadow px-4 py-2 rounded-lg"
                       >
-                        <span>{skill.name}</span>
+                        <span>{s.name}</span>
                         <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteSkill(skill)}
-                          disabled={saving}
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteSkill(s)}
+                          className="text-red-500 hover:text-red-700"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
@@ -551,49 +569,55 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Add Skill Modal */}
-        <Dialog
-          open={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-        >
-          <div className="bg-white rounded-lg p-6 w-80">
+      {/* ADD SKILL MODAL */}
+      <Dialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/40" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
             <Dialog.Title className="text-xl font-semibold mb-4">
               Add {newSkillType === "learning" ? "Learning" : "Teaching"} Skill
             </Dialog.Title>
             <Input
-              placeholder="Skill Name"
+              placeholder="Skill name"
               value={newSkillName}
               onChange={(e) => setNewSkillName(e.target.value)}
-              className="mb-4"
+              className="w-full mb-4"
             />
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
               <Button onClick={addSkill} disabled={saving}>
-                Add
+                {saving ? "Adding..." : "Add Skill"}
               </Button>
             </div>
-          </div>
-        </Dialog>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
 
-        {/* Delete Account Modal */}
-        <Dialog
-          open={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-        >
-          <div className="bg-white rounded-lg p-6 w-80">
+      {/* DELETE ACCOUNT MODAL */}
+      <Dialog
+        open={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/40" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md text-center">
             <Dialog.Title className="text-xl font-semibold mb-4 text-red-600">
-              Delete Account
+              Confirm Account Deletion
             </Dialog.Title>
-            <p className="mb-6">
-              Are you sure you want to delete your account? This action cannot
-              be undone.
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to permanently delete your account? This
+              action cannot be undone.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-center gap-4">
               <Button
                 variant="secondary"
                 onClick={() => setIsDeleteModalOpen(false)}
@@ -605,12 +629,12 @@ export default function ProfilePage() {
                 onClick={deleteAccount}
                 disabled={saving}
               >
-                Confirm Delete
+                {saving ? "Deleting..." : "Yes, Delete"}
               </Button>
             </div>
-          </div>
-        </Dialog>
-      </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
     </div>
   );
 }
