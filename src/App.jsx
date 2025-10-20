@@ -13,6 +13,7 @@ import MainLayout from "./MainLayout";
 import SkillsPage from "./Skills";
 import ProfilePage from "./Profile";
 import AppointmentsPage from "./AppointmentsPage";
+import BuyCredit from "./BuyCredit";
 
 export default function App() {
   return (
@@ -34,7 +35,7 @@ export default function App() {
             <Route path="/skills" element={<SkillsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="*" element={<ProfilePage />} />
-            <Route path="/buy-credits" element={<div>Buy Credits Page</div>} />
+            <Route path="/buy-credits" element={<BuyCredit />} />
           </Route>
         </Route>
 
