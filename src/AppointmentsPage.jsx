@@ -27,6 +27,44 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
 
+// Pagination component with Next/Prev
+function Pagination({ currentPage, totalItems, itemsPerPage, onPageChange }) {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex gap-2 justify-center mt-4">
+      <button
+        className={`px-4 py-2 rounded-lg text-white transition-all duration-300 ${
+          currentPage === 1
+            ? "bg-gray-700 cursor-not-allowed"
+            : "bg-black hover:bg-gray-800"
+        }`}
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+      >
+        Previous
+      </button>
+
+      <button className="px-4 py-2 rounded-lg bg-black text-white cursor-default">
+        {currentPage}
+      </button>
+
+      <button
+        className={`px-4 py-2 rounded-lg text-white transition-all duration-300 ${
+          currentPage === totalPages
+            ? "bg-gray-700 cursor-not-allowed"
+            : "bg-black hover:bg-gray-800"
+        }`}
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +75,11 @@ export default function AppointmentsPage() {
   const [availableTimes, setAvailableTimes] = useState([]);
   const [newTime, setNewTime] = useState("");
   const [activeTab, setActiveTab] = useState("requested");
+
+  // Pagination
+  const itemsPerPage = 6;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageKey, setPageKey] = useState(0); // for triggering animation
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -76,10 +119,7 @@ export default function AppointmentsPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/user/me`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          auth: getToken(),
-        },
+        headers: { "Content-Type": "application/json", auth: getToken() },
       });
       const data = await res.json();
       if (res.ok) setUserId(data.data.user._id);
@@ -193,16 +233,16 @@ export default function AppointmentsPage() {
           body: JSON.stringify({
             date: newDate,
             time: newTime,
-            status: selectedAppt.status, // keep current status
+            teacher: selectedAppt.teacher._id,
+            status: selectedAppt.status,
           }),
         }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to reschedule");
-
       toast.success("Appointment rescheduled");
       setOpenModal(false);
-      fetchAppointments(); // rerender appointments list
+      fetchAppointments();
     } catch (err) {
       toast.error(err.message);
     }
@@ -211,12 +251,28 @@ export default function AppointmentsPage() {
   if (loading || userId === null)
     return <p className="text-center mt-6">Loading appointments...</p>;
 
+  // Filter appointments
   const requestedAppointments = appointments.filter(
     (a) => a.student._id === userId
   );
   const receivedAppointments = appointments.filter(
     (a) => a.teacher._id === userId
   );
+
+  // Sort by status: pending > confirmed > completed > canceled
+  const statusOrder = { pending: 1, confirmed: 2, completed: 3, canceled: 4 };
+  const requestedAppointmentsSorted = [...requestedAppointments].sort(
+    (a, b) => statusOrder[a.status] - statusOrder[b.status]
+  );
+  const receivedAppointmentsSorted = [...receivedAppointments].sort(
+    (a, b) => statusOrder[a.status] - statusOrder[b.status]
+  );
+
+  // Pagination helper
+  const paginate = (list) => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return list.slice(start, start + itemsPerPage);
+  };
 
   const renderCards = (list, isTeacherView) =>
     list.length === 0 ? (
@@ -259,6 +315,8 @@ export default function AppointmentsPage() {
                         ? "text-yellow-500"
                         : appt.status === "confirmed"
                         ? "text-green-500"
+                        : appt.status === "completed"
+                        ? "text-blue-500"
                         : "text-red-500"
                     }`}
                   >
@@ -269,7 +327,6 @@ export default function AppointmentsPage() {
             </CardContent>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {/* Teacher: Pending -> Confirm + Cancel + Reschedule */}
               {isTeacherView && appt.status === "pending" && (
                 <>
                   <Button
@@ -295,7 +352,6 @@ export default function AppointmentsPage() {
                 </>
               )}
 
-              {/* Teachers & Students: Confirmed OR Pending (student) -> Cancel + Reschedule */}
               {(appt.status === "confirmed" ||
                 (!isTeacherView && appt.status === "pending")) && (
                 <>
@@ -323,9 +379,8 @@ export default function AppointmentsPage() {
 
   return (
     <>
-      <Toaster />
-      <div className="p-4 md:p-6">
-        <h1 className="text-2xl font-semibold mb-6">My Appointments</h1>
+      <div className="p-4 change-appt-px md:p-6">
+        <h1 className="text-2xl  font-semibold mb-6">My Appointments</h1>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex justify-center mb-6">
@@ -334,11 +389,41 @@ export default function AppointmentsPage() {
           </TabsList>
 
           <TabsContent value="received">
-            {renderCards(receivedAppointments, true)}
+            <div
+              key={pageKey}
+              className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
+            >
+              {renderCards(paginate(receivedAppointmentsSorted), true)}
+            </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={receivedAppointmentsSorted.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(page) => {
+                setCurrentPage(page);
+                setPageKey((prev) => prev + 1);
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="requested">
-            {renderCards(requestedAppointments, false)}
+            <div
+              key={pageKey}
+              className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
+            >
+              {renderCards(paginate(requestedAppointmentsSorted), false)}
+            </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={requestedAppointmentsSorted.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(page) => {
+                setCurrentPage(page);
+                setPageKey((prev) => prev + 1);
+              }}
+            />
           </TabsContent>
         </Tabs>
 

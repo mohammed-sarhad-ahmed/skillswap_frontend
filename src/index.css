@@ -137,3 +137,36 @@
     padding-inline: 0rem; /* shorthand for left and right */
   }
 }
+
+@media (max-width: 350px) {
+  .card-small {
+    transform: scale(0.9);
+    margin: 0.25rem auto;
+  }
+
+  .change-appt-px {
+    padding: 0.5rem !important;
+  }
+
+  .card-title {
+    font-size: 1rem !important;
+  }
+
+  .card-content {
+    font-size: 0.85rem !important;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease forwards;
+}
