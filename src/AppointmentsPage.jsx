@@ -282,7 +282,7 @@ export default function AppointmentsPage() {
         {list.map((appt) => (
           <Card
             key={appt._id}
-            className="flex flex-col justify-between p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
+            className="flex flex-col card-appt justify-between p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
           >
             <CardHeader className="flex items-center gap-4 p-0">
               <img

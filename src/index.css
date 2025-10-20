@@ -157,6 +157,26 @@
   }
 }
 
+@media (max-width: 335px) {
+  .change-appt-px {
+    padding: 0.3rem !important;
+    font-size: smaller !important;
+  }
+}
+
+@media (max-width: 325px) {
+  .change-appt-px {
+    padding: 0.2rem !important;
+    font-size: smaller !important;
+  }
+}
+
+@media (max-width: 321px) {
+  .change-appt-px {
+    padding: 0.16rem !important;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
