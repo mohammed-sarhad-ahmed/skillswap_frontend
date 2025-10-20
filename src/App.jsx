@@ -33,6 +33,7 @@ export default function App() {
             <Route path="/appointments" element={<AppointmentsPage />} />
             <Route path="/skills" element={<SkillsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<ProfilePage />} />
             <Route path="/buy-credits" element={<div>Buy Credits Page</div>} />
           </Route>
         </Route>
