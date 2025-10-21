@@ -74,12 +74,12 @@ export default function AppointmentsPage() {
   const [newDate, setNewDate] = useState(null);
   const [availableTimes, setAvailableTimes] = useState([]);
   const [newTime, setNewTime] = useState("");
-  const [activeTab, setActiveTab] = useState("requested");
+  const [activeTab, setActiveTab] = useState("received");
 
   // Pagination
   const itemsPerPage = 6;
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageKey, setPageKey] = useState(0); // for triggering animation
+  const [pageKey, setPageKey] = useState(0);
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -251,7 +251,6 @@ export default function AppointmentsPage() {
   if (loading || userId === null)
     return <p className="text-center mt-6">Loading appointments...</p>;
 
-  // Filter appointments
   const requestedAppointments = appointments.filter(
     (a) => a.student._id === userId
   );
@@ -259,7 +258,6 @@ export default function AppointmentsPage() {
     (a) => a.teacher._id === userId
   );
 
-  // Sort by status: pending > confirmed > completed > canceled
   const statusOrder = { pending: 1, confirmed: 2, completed: 3, canceled: 4 };
   const requestedAppointmentsSorted = [...requestedAppointments].sort(
     (a, b) => statusOrder[a.status] - statusOrder[b.status]
@@ -268,7 +266,6 @@ export default function AppointmentsPage() {
     (a, b) => statusOrder[a.status] - statusOrder[b.status]
   );
 
-  // Pagination helper
   const paginate = (list) => {
     const start = (currentPage - 1) * itemsPerPage;
     return list.slice(start, start + itemsPerPage);
@@ -323,6 +320,50 @@ export default function AppointmentsPage() {
                     {appt.status.toUpperCase()}
                   </span>
                 </p>
+
+                {/* Teaching or Learning Skills */}
+                <div className="mt-3">
+                  <p className="text-sm font-medium text-gray-600 mb-1">
+                    {isTeacherView ? "Learning Skills" : "Teaching Skills"}
+                  </p>
+
+                  {(() => {
+                    const rawSkills = isTeacherView
+                      ? appt.student?.learningSkills
+                      : appt.teacher?.teachingSkills;
+
+                    if (
+                      !rawSkills ||
+                      (Array.isArray(rawSkills) && rawSkills.length === 0)
+                    ) {
+                      return (
+                        <span className="text-gray-400 text-sm italic">
+                          Not specified
+                        </span>
+                      );
+                    }
+
+                    const skillsArray = Array.isArray(rawSkills)
+                      ? rawSkills
+                      : rawSkills
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        {skillsArray.map((skill, i) => (
+                          <span
+                            key={i}
+                            className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
               </CardDescription>
             </CardContent>
 
@@ -367,7 +408,7 @@ export default function AppointmentsPage() {
                     className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px]"
                     onClick={() => handleRescheduleClick(appt)}
                   >
-                    Reschedule
+                    Change Timeslot
                   </Button>
                 </>
               )}
@@ -380,7 +421,7 @@ export default function AppointmentsPage() {
   return (
     <>
       <div className="p-4 change-appt-px md:p-6">
-        <h1 className="text-2xl  font-semibold mb-6">My Appointments</h1>
+        <h1 className="text-2xl font-semibold mb-6">My Appointments</h1>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex justify-center mb-6">
