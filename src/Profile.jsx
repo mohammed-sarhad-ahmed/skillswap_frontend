@@ -13,8 +13,16 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("information");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Skill form state
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillType, setNewSkillType] = useState("learning");
+  const [newSkillCategory, setNewSkillCategory] = useState("");
+  const [newSkillLevel, setNewSkillLevel] = useState("");
+  const [newSkillExperience, setNewSkillExperience] = useState("");
+  const [newSkillDescription, setNewSkillDescription] = useState("");
+  const [newSkillCertifications, setNewSkillCertifications] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -22,7 +30,7 @@ export default function ProfilePage() {
   const [originalProfile, setOriginalProfile] = useState(null);
   const [skills, setSkills] = useState([]);
 
-  // Fetch user profile on mount
+  // Fetch user profile
   useEffect(() => {
     const fetchProfile = async () => {
       const token = getToken();
@@ -40,7 +48,7 @@ export default function ProfilePage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to load profile");
-
+        console.log(data);
         const availability = data.data.user.availability || {
           Monday: { start: "09:00", end: "17:00", off: false },
           Tuesday: { start: "09:00", end: "17:00", off: false },
@@ -58,11 +66,11 @@ export default function ProfilePage() {
         const userSkills = [];
         if (data.data.user.learningSkills)
           data.data.user.learningSkills.forEach((s) =>
-            userSkills.push({ name: s, type: "learning" })
+            userSkills.push({ ...s, type: "learning" })
           );
         if (data.data.user.teachingSkills)
           data.data.user.teachingSkills.forEach((s) =>
-            userSkills.push({ name: s, type: "teaching" })
+            userSkills.push({ ...s, type: "teaching" })
           );
         setSkills(userSkills);
       } catch (err) {
@@ -196,18 +204,42 @@ export default function ProfilePage() {
     try {
       const token = getToken();
       const endpoint =
-        newSkillType === "learning" ? "learning-skill" : "teaching-Skill";
+        newSkillType === "learning" ? "learning-skill" : "teaching-skill";
+
+      const skillPayload = {
+        name: newSkillName,
+        category: newSkillCategory,
+        level: newSkillLevel,
+        description: newSkillDescription,
+      };
+
+      // Add experience and certifications only for teaching skills
+      if (newSkillType === "teaching") {
+        skillPayload.experience = Number(newSkillExperience) || 0;
+        skillPayload.certifications = newSkillCertifications
+          ? newSkillCertifications.split(",").map((c) => c.trim())
+          : [];
+      }
+
       const res = await fetch(`${API_BASE_URL}/user/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, skill: newSkillName }),
+        body: JSON.stringify({ token, skill: skillPayload }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to add skill");
 
       toast.success(data.message);
-      setSkills([...skills, { name: newSkillName, type: newSkillType }]);
+      setSkills([...skills, { ...skillPayload, type: newSkillType }]);
+
+      // Reset modal fields
       setNewSkillName("");
+      setNewSkillCategory("");
+      setNewSkillLevel("");
+      setNewSkillExperience("");
+      setNewSkillDescription("");
+      setNewSkillCertifications("");
       setIsModalOpen(false);
     } catch (err) {
       toast.error(err.message);
@@ -221,17 +253,18 @@ export default function ProfilePage() {
     try {
       const token = getToken();
       const endpoint =
-        skill.type === "learning" ? "learning-skill" : "teaching-Skill";
+        skill.type === "learning" ? "learning-skill" : "teaching-skill";
+      console.log(skill);
       const res = await fetch(`${API_BASE_URL}/user/${endpoint}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, skill: skill.name }),
+        body: JSON.stringify({ token, skillId: skill._id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to delete skill");
 
       toast.success(data.message);
-      setSkills(skills.filter((s) => s !== skill));
+      setSkills(skills.filter((s) => s.name !== skill.name));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -342,7 +375,7 @@ export default function ProfilePage() {
                   value={profile.balance ?? 0}
                   onChange={(e) => {
                     let val = parseFloat(e.target.value);
-                    if (isNaN(val) || val < 0) val = 0; // Prevent negative
+                    if (isNaN(val) || val < 0) val = 0;
                     handleProfileChange("balance", val);
                   }}
                   className="w-full"
@@ -412,7 +445,6 @@ export default function ProfilePage() {
                           </>
                         )}
 
-                        {/* Day Off Toggle */}
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -519,6 +551,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {/* Learning Skills */}
               <div>
                 <h3 className="text-xl font-semibold mb-4">Learning Skills</h3>
                 <div className="space-y-2">
@@ -527,22 +560,42 @@ export default function ProfilePage() {
                     .map((s, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between bg-white shadow px-4 py-2 rounded-lg"
+                        className="flex flex-col sm:flex-row justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
                       >
-                        <span>{s.name}</span>
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            Name: {s.name}
+                          </p>
+                          {s.category && (
+                            <p className="text-sm text-gray-500">
+                              Category: {s.category}
+                            </p>
+                          )}
+                          {s.level && (
+                            <p className="text-sm text-gray-500">
+                              Level: {s.level}
+                            </p>
+                          )}
+                          {s.description && (
+                            <p className="text-sm text-gray-600">
+                              Description:{s.description}
+                            </p>
+                          )}
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => deleteSkill(s)}
                           className="text-red-500 hover:text-red-700"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-5 w-5" />
                         </Button>
                       </div>
                     ))}
                 </div>
               </div>
 
+              {/* Teaching Skills */}
               <div>
                 <h3 className="text-xl font-semibold mb-4">Teaching Skills</h3>
                 <div className="space-y-2">
@@ -551,16 +604,46 @@ export default function ProfilePage() {
                     .map((s, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between bg-white shadow px-4 py-2 rounded-lg"
+                        className="flex flex-col sm:flex-row justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
                       >
-                        <span>{s.name}</span>
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            Name: {s.name}
+                          </p>
+                          {s.category && (
+                            <p className="text-sm text-gray-500">
+                              Category: {s.category}
+                            </p>
+                          )}
+                          {s.level && (
+                            <p className="text-sm text-gray-500">
+                              Level: {s.level}
+                            </p>
+                          )}
+                          {s.experience !== undefined && (
+                            <p className="text-sm text-gray-500">
+                              Experience: {s.experience}{" "}
+                              {s.experience > 1 ? "years" : "year"}
+                            </p>
+                          )}
+                          {s.certifications?.length > 0 && (
+                            <p className="text-sm text-gray-500">
+                              Certifications: {s.certifications.join(", ")}
+                            </p>
+                          )}
+                          {s.description && (
+                            <p className="text-sm text-gray-600">
+                              Description: {s.description}
+                            </p>
+                          )}
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => deleteSkill(s)}
                           className="text-red-500 hover:text-red-700"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-5 w-5" />
                         </Button>
                       </div>
                     ))}
@@ -570,8 +653,6 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-
-      {/* ADD SKILL MODAL */}
       <Dialog
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -583,13 +664,78 @@ export default function ProfilePage() {
             <Dialog.Title className="text-xl font-semibold mb-4">
               Add {newSkillType === "learning" ? "Learning" : "Teaching"} Skill
             </Dialog.Title>
-            <Input
-              placeholder="Skill name"
-              value={newSkillName}
-              onChange={(e) => setNewSkillName(e.target.value)}
-              className="w-full mb-4"
-            />
-            <div className="flex justify-end gap-2">
+            <div className="space-y-3">
+              <Input
+                placeholder="Skill name"
+                value={newSkillName}
+                onChange={(e) => setNewSkillName(e.target.value)}
+              />
+
+              {/* Category Dropdown with "Other" */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">
+                  Category
+                </label>
+                <select
+                  value={newSkillCategory}
+                  onChange={(e) => setNewSkillCategory(e.target.value)}
+                  className="w-full border rounded px-2 py-1 mb-2"
+                >
+                  <option value="">Select Category</option>
+                  <option value="Math">Math</option>
+                  <option value="Science">Science</option>
+                  <option value="Languages">Languages</option>
+                  <option value="Arts">Arts</option>
+                  <option value="Music">Music</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Technology">Technology</option>
+                  <option value="Business">Business</option>
+                  <option value="Health">Health</option>
+                  <option value="Other">Other</option>
+                </select>
+                {newSkillCategory === "Other" && (
+                  <Input
+                    placeholder="Enter custom category"
+                    value={newSkillCategory}
+                    onChange={(e) => setNewSkillCategory(e.target.value)}
+                  />
+                )}
+              </div>
+
+              <select
+                value={newSkillLevel}
+                onChange={(e) => setNewSkillLevel(e.target.value)}
+                className="w-full border rounded px-2 py-1"
+              >
+                <option value="">Select Level</option>
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+                <option value="Expert">Expert</option>
+              </select>
+
+              {newSkillType === "teaching" && (
+                <Input
+                  type="number"
+                  placeholder="Experience (years)"
+                  value={newSkillExperience}
+                  onChange={(e) => setNewSkillExperience(e.target.value)}
+                />
+              )}
+              <Input
+                placeholder="Description (optional)"
+                value={newSkillDescription}
+                onChange={(e) => setNewSkillDescription(e.target.value)}
+              />
+              {newSkillType === "teaching" && (
+                <Input
+                  placeholder="Certifications (comma separated)"
+                  value={newSkillCertifications}
+                  onChange={(e) => setNewSkillCertifications(e.target.value)}
+                />
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>

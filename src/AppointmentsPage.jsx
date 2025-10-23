@@ -279,25 +279,29 @@ export default function AppointmentsPage() {
         {list.map((appt) => (
           <Card
             key={appt._id}
-            className="flex flex-col card-appt justify-between p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
+            className="flex flex-col justify-between h-full p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800"
           >
-            <CardHeader className="flex items-center gap-4 p-0">
-              <img
-                src={`${API_BASE_URL}/user_avatar/${
-                  isTeacherView ? appt.student.avatar : appt.teacher.avatar
-                }`}
-                alt={
-                  isTeacherView ? appt.student.fullName : appt.teacher.fullName
-                }
-                className="w-16 h-16 rounded-full object-cover border-2 border-blue-500"
-              />
-              <CardTitle className="text-lg font-semibold">
-                {isTeacherView ? appt.student.fullName : appt.teacher.fullName}
-              </CardTitle>
-            </CardHeader>
+            <div className="flex-1">
+              <CardHeader className="flex items-center gap-4 p-0 mb-3">
+                <img
+                  src={`${API_BASE_URL}/user_avatar/${
+                    isTeacherView ? appt.student.avatar : appt.teacher.avatar
+                  }`}
+                  alt={
+                    isTeacherView
+                      ? appt.student.fullName
+                      : appt.teacher.fullName
+                  }
+                  className="w-16 h-16 rounded-full object-cover border-2 border-blue-500"
+                />
+                <CardTitle className="text-lg font-semibold">
+                  {isTeacherView
+                    ? appt.student.fullName
+                    : appt.teacher.fullName}
+                </CardTitle>
+              </CardHeader>
 
-            <CardContent className="p-0 mt-2">
-              <CardDescription>
+              <CardContent className="p-0 space-y-2">
                 <p>
                   <strong>Date:</strong> {new Date(appt.date).toDateString()}
                 </p>
@@ -321,7 +325,6 @@ export default function AppointmentsPage() {
                   </span>
                 </p>
 
-                {/* Teaching or Learning Skills */}
                 <div className="mt-3">
                   <p className="text-sm font-medium text-gray-600 mb-1">
                     {isTeacherView ? "Learning Skills" : "Teaching Skills"}
@@ -335,13 +338,12 @@ export default function AppointmentsPage() {
                     if (
                       !rawSkills ||
                       (Array.isArray(rawSkills) && rawSkills.length === 0)
-                    ) {
+                    )
                       return (
                         <span className="text-gray-400 text-sm italic">
                           Not specified
                         </span>
                       );
-                    }
 
                     const skillsArray = Array.isArray(rawSkills)
                       ? rawSkills
@@ -364,31 +366,32 @@ export default function AppointmentsPage() {
                     );
                   })()}
                 </div>
-              </CardDescription>
-            </CardContent>
+              </CardContent>
+            </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            {/* Buttons aligned bottom */}
+            <div className="mt-4 flex flex-wrap gap-2 justify-center">
               {isTeacherView && appt.status === "pending" && (
                 <>
                   <Button
-                    className="bg-green-500 hover:bg-green-600 text-white flex-1 min-w-[120px]"
+                    className="bg-green-500 hover:bg-green-600 text-white flex-1 min-w-[110px]"
                     onClick={() => handleConfirm(appt._id)}
                   >
                     Confirm
                   </Button>
                   <Button
                     variant="outline"
-                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[120px]"
+                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[110px]"
                     onClick={() => handleCancel(appt._id)}
                   >
                     Cancel
                   </Button>
                   <Button
                     variant="outline"
-                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px]"
+                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[110px]"
                     onClick={() => handleRescheduleClick(appt)}
                   >
-                    Reschedule
+                    Change Timeslot
                   </Button>
                 </>
               )}
@@ -398,14 +401,14 @@ export default function AppointmentsPage() {
                 <>
                   <Button
                     variant="outline"
-                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[120px]"
+                    className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[110px]"
                     onClick={() => handleCancel(appt._id)}
                   >
                     Cancel
                   </Button>
                   <Button
                     variant="outline"
-                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[120px]"
+                    className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[110px]"
                     onClick={() => handleRescheduleClick(appt)}
                   >
                     Change Timeslot
@@ -423,12 +426,20 @@ export default function AppointmentsPage() {
       <div className="p-4 change-appt-px md:p-6">
         <h1 className="text-2xl font-semibold mb-6">My Appointments</h1>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(val) => {
+            setActiveTab(val);
+            setCurrentPage(1); // reset pagination
+            setPageKey((prev) => prev + 1); // refresh fade animation
+          }}
+          className="w-full"
+        >
+          {" "}
           <TabsList className="flex justify-center mb-6">
             <TabsTrigger value="received">Received from Students</TabsTrigger>
             <TabsTrigger value="requested">Requested by Me</TabsTrigger>
           </TabsList>
-
           <TabsContent value="received">
             <div
               key={pageKey}
@@ -447,7 +458,6 @@ export default function AppointmentsPage() {
               }}
             />
           </TabsContent>
-
           <TabsContent value="requested">
             <div
               key={pageKey}
@@ -472,7 +482,7 @@ export default function AppointmentsPage() {
         <Dialog open={openModal} onOpenChange={setOpenModal}>
           <DialogContent className="w-full sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Reschedule Appointment</DialogTitle>
+              <DialogTitle>Change timeslot</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">

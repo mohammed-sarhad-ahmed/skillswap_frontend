@@ -9,36 +9,20 @@ import {
 } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "./components/ui/dialog";
-import { Calendar } from "./components/ui/calendar";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "./components/ui/select";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
+import { useNavigate } from "react-router";
 
 export default function SkillsPage() {
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [level, setLevel] = useState("");
   const [users, setUsers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [availableTimes, setAvailableTimes] = useState([]);
-  const [selectedTime, setSelectedTime] = useState("");
-  const [open, setOpen] = useState(false);
-
   const usersPerPage = 8;
+  const navigate = useNavigate();
 
+  // Fetch all users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -55,119 +39,35 @@ export default function SkillsPage() {
     fetchUsers();
   }, []);
 
-  const getWeekday = (date) =>
-    date.toLocaleDateString("en-US", { weekday: "long" });
-
-  const generateTimeSlots = (start, end) => {
-    const times = [];
-    let [h, m] = start.split(":").map(Number);
-    let [endH, endM] = end.split(":").map(Number);
-
-    while (h < endH || (h === endH && m < endM)) {
-      const hh = String(h).padStart(2, "0");
-      const mm = String(m).padStart(2, "0");
-      times.push(`${hh}:${mm}`);
-      m += 30;
-      if (m >= 60) {
-        h++;
-        m -= 60;
-      }
-    }
-    return times;
-  };
-
-  const isDateDisabled = (date) => {
-    if (!selectedUser || !selectedUser.availability) return true;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (date < today) return true;
-    const weekday = getWeekday(date);
-    const dayData = selectedUser.availability[weekday];
-    return !dayData || dayData.off;
-  };
-
-  const handleDateSelect = (date) => {
-    if (isDateDisabled(date)) return;
-    setSelectedDate(date);
-
-    if (!selectedUser?.availability) return;
-    const weekday = getWeekday(date);
-    const dayData = selectedUser.availability[weekday];
-
-    if (!dayData || dayData.off) {
-      setAvailableTimes([]);
-      return;
-    }
-
-    let times = generateTimeSlots(dayData.start, dayData.end);
-
-    // 🕒 Filter out past times if the selected date is today
-    const now = new Date();
-    if (date.toDateString() === now.toDateString()) {
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      times = times.filter((time) => {
-        const [h, m] = time.split(":").map(Number);
-        const totalMinutes = h * 60 + m;
-        return totalMinutes > currentMinutes;
-      });
-    }
-
-    setAvailableTimes(times);
-  };
-
-  const handleConnectClick = (user) => {
-    setSelectedUser(user);
-    setSelectedDate(null);
-    setSelectedTime("");
-    setAvailableTimes([]);
-    setOpen(true);
-  };
-
-  const handleConfirm = async () => {
-    if (!selectedDate || !selectedTime) {
-      toast.error("Please select both a date and time");
-      return;
-    }
-
-    if (!selectedUser?._id) return;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/appointments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          auth: getToken(),
-        },
-        body: JSON.stringify({
-          teacher: selectedUser._id,
-          date: selectedDate.toISOString().split("T")[0],
-          time: selectedTime,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok)
-        throw new Error(data.message || "Failed to book appointment");
-
-      toast.success(`Appointment confirmed with ${selectedUser.fullName}`);
-      setOpen(false);
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  // ✅ FIXED: support both teachingSkills and skills
+  // Combined filtering logic
   const filteredUsers = users.filter((user) => {
-    const allSkills = user.teachingSkills || user.skills || [];
-    return (
+    const teachingSkills = user.teachingSkills || [];
+    const learningSkills = user.learningSkills || [];
+    const allSkills = [...teachingSkills, ...learningSkills];
+
+    // Text search
+    const matchesSearch =
       user.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-      allSkills.some((skill) =>
-        skill.toLowerCase().includes(search.toLowerCase())
-      )
-    );
+      allSkills.some((s) =>
+        s.name.toLowerCase().includes(search.toLowerCase())
+      );
+
+    // Category filter
+    const matchesCategory = category
+      ? allSkills.some(
+          (s) => s.category?.toLowerCase() === category.toLowerCase()
+        )
+      : true;
+
+    // Level filter
+    const matchesLevel = level
+      ? allSkills.some((s) => s.level?.toLowerCase() === level.toLowerCase())
+      : true;
+
+    return matchesSearch && matchesCategory && matchesLevel;
   });
 
+  // Pagination logic
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
   const startIndex = (currentPage - 1) * usersPerPage;
   const currentUsers = filteredUsers.slice(
@@ -183,9 +83,10 @@ export default function SkillsPage() {
     <>
       <Toaster />
 
-      {/* 🔎 Search Bar */}
-      <div className="px-4 sm:px-6 md:px-0 mb-6 flex justify-center w-full">
-        <div className="w-full max-w-xl mx-2.5">
+      {/* Filters */}
+      <div className="px-4 sm:px-6 md:px-0 mb-6 flex flex-col md:flex-row justify-between items-center gap-3 w-full max-w-5xl mx-auto">
+        {/* Search Bar */}
+        <div className="flex-1">
           <Input
             placeholder="Search by name or skill..."
             value={search}
@@ -193,12 +94,53 @@ export default function SkillsPage() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition w-full"
+            className="w-full h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-5 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-3 mt-3 md:mt-0">
+          {/* Category Filter */}
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-4 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+            <option value="">All Categories</option>
+            <option value="Math">Math</option>
+            <option value="Science">Science</option>
+            <option value="Languages">Languages</option>
+            <option value="Arts">Arts</option>
+            <option value="Music">Music</option>
+            <option value="Sports">Sports</option>
+            <option value="Technology">Technology</option>
+            <option value="Business">Business</option>
+            <option value="Health">Health</option>
+            <option value="Other">Other</option>
+          </select>
+
+          {/* Level Filter */}
+          <select
+            value={level}
+            onChange={(e) => {
+              setLevel(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-4 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+            <option value="">All Levels</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Expert">Expert</option>
+          </select>
         </div>
       </div>
 
-      {/* 👥 User Cards */}
+      {/* User Cards */}
       <div className="flex flex-col min-h-screen p-4 md:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentUsers.length > 0 ? (
@@ -214,22 +156,48 @@ export default function SkillsPage() {
                     className="w-32 h-32 rounded-full object-cover border-4 border-blue-500"
                   />
                   <CardHeader className="w-full text-center p-0">
-                    <CardTitle className="text-lg font-semibold">
+                    <CardTitle className="text-lg font-semibold capitalize">
                       {user.fullName}
                     </CardTitle>
                   </CardHeader>
+
                   <CardContent className="p-0">
                     <CardDescription>
-                      <div className="flex flex-wrap gap-2 justify-center mt-2">
-                        {(user.teachingSkills || user.skills || []).map(
-                          (skill, idx) => (
-                            <span
-                              key={idx}
-                              className="bg-gradient-to-r from-blue-400 to-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
-                            >
-                              {skill}
-                            </span>
-                          )
+                      <div className="flex flex-col items-center">
+                        {user.teachingSkills?.length > 0 && (
+                          <>
+                            <p className="font-semibold mt-2 text-blue-600">
+                              Teaching:
+                            </p>
+                            <div className="flex flex-wrap gap-2 justify-center mt-1">
+                              {user.teachingSkills.map((skill, idx) => (
+                                <span
+                                  key={`teach-${idx}`}
+                                  className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
+                                >
+                                  {skill.name} ({skill.level})
+                                </span>
+                              ))}
+                            </div>
+                          </>
+                        )}
+
+                        {user.learningSkills?.length > 0 && (
+                          <>
+                            <p className="font-semibold mt-3 text-green-600">
+                              Learning:
+                            </p>
+                            <div className="flex flex-wrap gap-2 justify-center mt-1">
+                              {user.learningSkills.map((skill, idx) => (
+                                <span
+                                  key={`learn-${idx}`}
+                                  className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
+                                >
+                                  {skill.name} ({skill.level})
+                                </span>
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     </CardDescription>
@@ -238,9 +206,9 @@ export default function SkillsPage() {
 
                 <Button
                   className="mt-5 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-md"
-                  onClick={() => handleConnectClick(user)}
+                  onClick={() => navigate(`/profile/${user._id}`)}
                 >
-                  Connect to Teacher
+                  View Profile
                 </Button>
               </Card>
             ))
@@ -251,7 +219,7 @@ export default function SkillsPage() {
           )}
         </div>
 
-        {/* 📄 Pagination */}
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-wrap justify-center mt-6 gap-2">
             <Button
@@ -278,70 +246,6 @@ export default function SkillsPage() {
           </div>
         )}
       </div>
-
-      {/* 🗓️ Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="pt-10">
-              Connect with {selectedUser?.fullName || "Teacher"}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <label className="font-medium mb-2 block">Select a Date</label>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDateSelect}
-                className="rounded-md border shadow-sm w-full"
-                disabled={isDateDisabled}
-              />
-            </div>
-
-            {selectedDate && (
-              <>
-                {availableTimes.length > 0 ? (
-                  <div>
-                    <label className="font-medium mb-2 block">
-                      Available Times
-                    </label>
-                    <Select
-                      onValueChange={setSelectedTime}
-                      value={selectedTime}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableTimes.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    Teacher is not available on this day.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-
-          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirm} disabled={!selectedTime}>
-              Make Appointment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
