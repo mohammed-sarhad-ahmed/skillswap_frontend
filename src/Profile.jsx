@@ -560,7 +560,7 @@ export default function ProfilePage() {
                     .map((s, i) => (
                       <div
                         key={i}
-                        className="flex flex-col sm:flex-row justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
+                        className="flex justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
                       >
                         <div>
                           <p className="font-semibold text-gray-800">
@@ -604,7 +604,7 @@ export default function ProfilePage() {
                     .map((s, i) => (
                       <div
                         key={i}
-                        className="flex flex-col sm:flex-row justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
+                        className="flex justify-between bg-white shadow px-4 py-3 rounded-lg gap-2 hover:shadow-md transition"
                       >
                         <div>
                           <p className="font-semibold text-gray-800">

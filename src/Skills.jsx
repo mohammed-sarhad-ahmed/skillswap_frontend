@@ -84,7 +84,7 @@ export default function SkillsPage() {
       <Toaster />
 
       {/* Filters */}
-      <div className="px-4 sm:px-6 md:px-0 mb-6 flex flex-col md:flex-row justify-between items-center gap-3 w-full max-w-5xl mx-auto">
+      <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-center gap-3 w-full max-w-5xl mx-auto">
         {/* Search Bar */}
         <div className="flex-1">
           <Input
@@ -206,7 +206,7 @@ export default function SkillsPage() {
 
                 <Button
                   className="mt-5 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-md"
-                  onClick={() => navigate(`/profile/${user._id}`)}
+                  onClick={() => navigate(`/profile-info/${user._id}`)}
                 >
                   View Profile
                 </Button>

@@ -14,6 +14,7 @@ import SkillsPage from "./Skills";
 import ProfilePage from "./Profile";
 import AppointmentsPage from "./AppointmentsPage";
 import BuyCredit from "./BuyCredit";
+import ProfileInfo from "./ProfileInfo";
 
 export default function App() {
   return (
@@ -34,8 +35,9 @@ export default function App() {
             <Route path="/appointments" element={<AppointmentsPage />} />
             <Route path="/skills" element={<SkillsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="*" element={<ProfilePage />} />
+            <Route path="/profile-info/:userId" element={<ProfileInfo />} />
             <Route path="/buy-credits" element={<BuyCredit />} />
+            <Route path="/" element={<ProfilePage />} />
           </Route>
         </Route>
 
