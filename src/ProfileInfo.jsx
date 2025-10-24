@@ -4,15 +4,15 @@ import { ArrowLeft, MessageCircle, Flag } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
-import ChatBox from "./ChatBox";
 import toast from "react-hot-toast";
 
 export default function ProfileInfo() {
   const { userId: id } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [showChat, setShowChat] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
+  // Fetch profile user
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -21,12 +21,32 @@ export default function ProfileInfo() {
         });
         const data = await res.json();
         setUser(data.data.user);
-      } catch (err) {
+      } catch {
         toast.error("Could not fetch user info");
       }
     };
     fetchUser();
   }, [id]);
+
+  // Fetch current logged-in user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/user/me`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+        });
+        const data = await res.json();
+        setCurrentUser(data.data.user);
+      } catch {
+        toast.error("Could not fetch current user info");
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   const handleReport = async () => {
     try {
@@ -47,7 +67,7 @@ export default function ProfileInfo() {
     }
   };
 
-  if (!user) {
+  if (!user || !currentUser) {
     return (
       <div className="flex justify-center items-center h-screen text-lg text-gray-500">
         Loading...
@@ -57,7 +77,7 @@ export default function ProfileInfo() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex flex-col items-center py-10 px-4 relative">
-      {/* Fixed Back Button (top-left) */}
+      {/* Fixed Back Button */}
       <button
         onClick={() => navigate("/skills")}
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-700 hover:text-black bg-white/70 backdrop-blur-md px-4 py-2 rounded-full shadow-md transition"
@@ -175,7 +195,9 @@ export default function ProfileInfo() {
         {/* Buttons */}
         <div className="flex gap-4 justify-center mt-10">
           <Button
-            onClick={() => setShowChat(!showChat)}
+            onClick={
+              () => navigate(`/chat/${user._id}`) // redirect to chat page
+            }
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl shadow-md"
           >
             <MessageCircle className="h-5 w-5" />
@@ -189,15 +211,6 @@ export default function ProfileInfo() {
             Report
           </Button>
         </div>
-
-        {/* Chat Interface */}
-        {showChat && (
-          <div className="mt-8 flex justify-center">
-            <div className="w-full max-w-md px-4">
-              <ChatBox user={user} onClose={() => setShowChat(false)} />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import {
   CreditCard,
   User,
   LogOut,
+  MessageCircleCodeIcon,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -30,6 +31,7 @@ const navItems = [
   { title: "Appointments", to: "/appointments", icon: Calendar },
   { title: "Skills", to: "/skills", icon: Settings },
   { title: "Buy Credits", to: "/buy-credits", icon: CreditCard },
+  { title: "Chats", to: "/Chat", icon: MessageCircleCodeIcon },
 ];
 
 export default function AppSidebar() {

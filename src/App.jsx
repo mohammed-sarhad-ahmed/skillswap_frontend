@@ -15,6 +15,7 @@ import ProfilePage from "./Profile";
 import AppointmentsPage from "./AppointmentsPage";
 import BuyCredit from "./BuyCredit";
 import ProfileInfo from "./ProfileInfo";
+import ChatPage from "./ChatPage";
 
 export default function App() {
   return (
@@ -37,6 +38,8 @@ export default function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/profile-info/:userId" element={<ProfileInfo />} />
             <Route path="/buy-credits" element={<BuyCredit />} />
+            <Route path="/chat/:userId" element={<ChatPage />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/" element={<ProfilePage />} />
           </Route>
         </Route>
