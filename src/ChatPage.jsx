@@ -16,10 +16,10 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Fetch current user and chats
   useEffect(() => {
     async function init() {
       try {
-        // Fetch current user
         const resMe = await fetch(`${API_BASE_URL}/user/me`, {
           method: "POST",
           headers: { "Content-Type": "application/json", auth: getToken() },
@@ -27,14 +27,12 @@ export default function ChatPage() {
         const meData = await resMe.json();
         setCurrentUser(meData.data.user);
 
-        // Fetch chat users
         const resChats = await fetch(`${API_BASE_URL}/messages`, {
           headers: { auth: getToken() },
         });
         const chatData = await resChats.json();
         let users = chatData.data.users || [];
 
-        // If URL has a userId but not in users → fetch manually
         if (selectedUserId) {
           let user = users.find((u) => u._id === selectedUserId);
           if (!user) {
@@ -57,50 +55,80 @@ export default function ChatPage() {
         console.error(err);
       }
     }
-
     init();
   }, [selectedUserId]);
 
-  // Real-time message update (when receiving)
+  // Register user for online tracking
   useEffect(() => {
-    socket.on("receive_message", (message) => {
-      setChatUsers((prev) =>
-        prev.map((user) => {
-          if (
-            user._id === message.senderId ||
-            user._id === message.receiverId
-          ) {
-            return { ...user, lastMessage: message };
-          }
-          return user;
-        })
-      );
+    if (currentUser?._id) {
+      socket.emit("register_user", currentUser._id);
+    }
+  }, [currentUser?._id]);
+
+  // Real-time message updates
+  useEffect(() => {
+    const handleReceiveMessage = async (message) => {
+      const senderId = message.senderId;
+      const receiverId = message.receiverId;
+      const otherId = senderId === currentUser?._id ? receiverId : senderId;
+
+      setChatUsers((prevUsers) => {
+        let users = [...prevUsers];
+        const index = users.findIndex((u) => u._id === otherId);
+
+        let unread = 1;
+        if (index !== -1) {
+          unread = users[index].unread || 0;
+          if (selectedUser?._id === otherId) unread = 0;
+          else unread += 1;
+        }
+
+        const updatedUser = {
+          ...(index !== -1 ? users[index] : {}),
+          _id: otherId,
+          lastMessage: message,
+          unread,
+        };
+
+        if (index !== -1) users.splice(index, 1);
+        users.unshift(updatedUser);
+        return users;
+      });
 
       if (
         selectedUser &&
-        [selectedUser._id, currentUser?._id].includes(message.senderId) &&
-        [selectedUser._id, currentUser?._id].includes(message.receiverId)
+        [selectedUser._id, currentUser?._id].includes(senderId) &&
+        [selectedUser._id, currentUser?._id].includes(receiverId)
       ) {
         setSelectedUser((prev) => ({ ...prev, lastMessage: message }));
+        fetch(`${API_BASE_URL}/mark_read/${senderId}`, {
+          method: "POST",
+          headers: { auth: getToken() },
+        });
       }
-    });
+    };
 
-    return () => socket.off("receive_message");
-  }, [selectedUser, currentUser]);
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("receive_message_global", handleReceiveMessage);
 
-  // ✅ Update sidebar instantly when sending
+    return () => {
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("receive_message_global", handleReceiveMessage);
+    };
+  }, [currentUser?._id, selectedUser]);
+
+  // Update sidebar instantly when sending a message
   const handleLocalMessageUpdate = (message) => {
     setChatUsers((prev) =>
       prev.map((user) => {
         if (user._id === message.senderId || user._id === message.receiverId) {
-          return { ...user, lastMessage: message };
+          return { ...user, lastMessage: message, unread: 0 };
         }
         return user;
       })
     );
   };
 
-  // ✅ time formatter for sidebar
   const formatTime = (iso) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -126,12 +154,10 @@ export default function ChatPage() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Header */}
         <h2 className="p-4 font-bold text-xl text-white bg-gradient-to-r from-red-500 to-red-600 shadow-md border-b border-red-600">
           Chats
         </h2>
 
-        {/* Chat user list */}
         <div className="flex-1 overflow-y-auto">
           {chatUsers.map((user) => {
             const isActive = selectedUser?._id === user._id;
@@ -141,6 +167,17 @@ export default function ChatPage() {
                 onClick={() => {
                   setSelectedUser(user);
                   setSidebarOpen(false);
+
+                  setChatUsers((prev) =>
+                    prev.map((u) =>
+                      u._id === user._id ? { ...u, unread: 0 } : u
+                    )
+                  );
+
+                  fetch(`${API_BASE_URL}/mark_read/${user._id}`, {
+                    method: "POST",
+                    headers: { auth: getToken() },
+                  });
                 }}
                 className={`flex items-center gap-3 p-3 cursor-pointer transition border-l-4 ${
                   isActive
@@ -153,7 +190,7 @@ export default function ChatPage() {
                   alt={user.fullName}
                   className="w-10 h-10 rounded-full object-cover"
                 />
-                <div className="flex-1">
+                <div className="flex-1 relative">
                   <p
                     className={`font-medium ${
                       isActive ? "text-red-600" : "text-gray-800"
@@ -164,8 +201,12 @@ export default function ChatPage() {
                   <p className="text-sm text-gray-500 truncate">
                     {user.lastMessage?.text || "No messages yet"}
                   </p>
+                  {user.unread > 0 && (
+                    <span className="absolute right-0 top-0 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {user.unread}
+                    </span>
+                  )}
                 </div>
-                {/* ✅ message time on sidebar */}
                 <span className="text-xs text-gray-400 whitespace-nowrap ml-1">
                   {user.lastMessage?.createdAt
                     ? formatTime(user.lastMessage.createdAt)
