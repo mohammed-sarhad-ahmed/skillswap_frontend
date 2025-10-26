@@ -117,16 +117,25 @@ export default function ChatPage() {
     };
   }, [currentUser?._id, selectedUser]);
 
-  // Update sidebar instantly when sending a message
+  // Update sidebar instantly when sending a message and reorder
   const handleLocalMessageUpdate = (message) => {
-    setChatUsers((prev) =>
-      prev.map((user) => {
-        if (user._id === message.senderId || user._id === message.receiverId) {
-          return { ...user, lastMessage: message, unread: 0 };
-        }
-        return user;
-      })
-    );
+    setChatUsers((prev) => {
+      let users = [...prev];
+      const index = users.findIndex(
+        (u) => u._id === message.senderId || u._id === message.receiverId
+      );
+
+      const updatedUser = {
+        ...(index !== -1 ? users[index] : {}),
+        lastMessage: message,
+        unread: 0,
+      };
+
+      if (index !== -1) users.splice(index, 1); // remove old position
+      users.unshift(updatedUser); // add to top
+
+      return users;
+    });
   };
 
   const formatTime = (iso) => {

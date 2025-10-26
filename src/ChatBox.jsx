@@ -5,6 +5,7 @@ import { Input } from "./components/ui/input";
 import io from "socket.io-client";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
+import { useNavigate } from "react-router";
 
 const socket = io(API_BASE_URL, { transports: ["websocket"] });
 
@@ -17,6 +18,7 @@ export default function ChatBox({
   const [messages, setMessages] = useState([]);
   const [msg, setMsg] = useState("");
   const chatEndRef = useRef(null);
+  const navigate = useNavigate();
 
   const roomId = [currentUser._id, user._id].sort().join("_");
 
@@ -115,7 +117,12 @@ export default function ChatBox({
             className="w-10 h-10 rounded-full object-cover"
             alt={user.fullName}
           />
-          <p className="font-medium">{user.fullName}</p>
+          <button
+            onClick={() => navigate(`/profile-info/${user._id}`)}
+            className="font-medium hover:underline focus:outline-none"
+          >
+            {user.fullName}
+          </button>
         </div>
         {onClose && (
           <Button
@@ -130,7 +137,7 @@ export default function ChatBox({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3  bg-gray-50">
         {messages.length === 0 && (
           <p className="text-gray-400 text-center mt-4">No messages yet</p>
         )}
