@@ -22,7 +22,6 @@ export default function SkillsPage() {
   const usersPerPage = 8;
   const navigate = useNavigate();
 
-  // Fetch all users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -39,27 +38,23 @@ export default function SkillsPage() {
     fetchUsers();
   }, []);
 
-  // Combined filtering logic
   const filteredUsers = users.filter((user) => {
     const teachingSkills = user.teachingSkills || [];
     const learningSkills = user.learningSkills || [];
     const allSkills = [...teachingSkills, ...learningSkills];
 
-    // Text search
     const matchesSearch =
       user.fullName?.toLowerCase().includes(search.toLowerCase()) ||
       allSkills.some((s) =>
         s.name.toLowerCase().includes(search.toLowerCase())
       );
 
-    // Category filter
     const matchesCategory = category
       ? allSkills.some(
           (s) => s.category?.toLowerCase() === category.toLowerCase()
         )
       : true;
 
-    // Level filter
     const matchesLevel = level
       ? allSkills.some((s) => s.level?.toLowerCase() === level.toLowerCase())
       : true;
@@ -67,7 +62,6 @@ export default function SkillsPage() {
     return matchesSearch && matchesCategory && matchesLevel;
   });
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
   const startIndex = (currentPage - 1) * usersPerPage;
   const currentUsers = filteredUsers.slice(
@@ -94,20 +88,19 @@ export default function SkillsPage() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-5 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="w-full h-14 rounded-xl border border-gray-300 shadow-sm px-5 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
         </div>
 
         {/* Filters */}
         <div className="flex gap-3 mt-3 md:mt-0">
-          {/* Category Filter */}
           <select
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
               setCurrentPage(1);
             }}
-            className="h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-4 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="h-14 rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           >
             <option value="">All Categories</option>
             <option value="Math">Math</option>
@@ -122,14 +115,13 @@ export default function SkillsPage() {
             <option value="Other">Other</option>
           </select>
 
-          {/* Level Filter */}
           <select
             value={level}
             onChange={(e) => {
               setLevel(e.target.value);
               setCurrentPage(1);
             }}
-            className="h-14 rounded-2xl border border-gray-300 dark:border-gray-700 shadow-md px-4 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="h-14 rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           >
             <option value="">All Levels</option>
             <option value="Beginner">Beginner</option>
@@ -141,22 +133,22 @@ export default function SkillsPage() {
       </div>
 
       {/* User Cards */}
-      <div className="flex flex-col min-h-screen p-4 md:p-6">
+      <div className="flex flex-col min-h-screen p-4 md:p-6 bg-gray-50">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentUsers.length > 0 ? (
             currentUsers.map((user) => (
               <Card
                 key={user._id}
-                className="flex flex-col items-center text-center p-6 justify-between h-full rounded-2xl shadow-lg hover:shadow-2xl transition-transform transform hover:-translate-y-1 bg-white dark:bg-gray-800 w-full"
+                className="flex flex-col items-center text-center p-6 justify-between h-full rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1"
               >
                 <div className="flex flex-col items-center space-y-3">
                   <img
                     src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
                     alt={user.fullName}
-                    className="w-32 h-32 rounded-full object-cover border-4 border-blue-500"
+                    className="w-28 h-28 rounded-full object-cover border-4 border-blue-500/40"
                   />
                   <CardHeader className="w-full text-center p-0">
-                    <CardTitle className="text-lg font-semibold capitalize">
+                    <CardTitle className="text-lg font-semibold capitalize text-gray-800">
                       {user.fullName}
                     </CardTitle>
                   </CardHeader>
@@ -173,7 +165,7 @@ export default function SkillsPage() {
                               {user.teachingSkills.map((skill, idx) => (
                                 <span
                                   key={`teach-${idx}`}
-                                  className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
+                                  className="bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
                                 >
                                   {skill.name} ({skill.level})
                                 </span>
@@ -191,7 +183,7 @@ export default function SkillsPage() {
                               {user.learningSkills.map((skill, idx) => (
                                 <span
                                   key={`learn-${idx}`}
-                                  className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md"
+                                  className="bg-green-500/10 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-300"
                                 >
                                   {skill.name} ({skill.level})
                                 </span>
@@ -205,7 +197,7 @@ export default function SkillsPage() {
                 </div>
 
                 <Button
-                  className="mt-5 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-md"
+                  className="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
                   onClick={() => navigate(`/profile-info/${user._id}`)}
                 >
                   View Profile
@@ -221,10 +213,11 @@ export default function SkillsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex flex-wrap justify-center mt-6 gap-2">
+          <div className="flex flex-wrap justify-center mt-8 gap-2">
             <Button
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
+              variant="outline"
             >
               Prev
             </Button>
@@ -240,6 +233,7 @@ export default function SkillsPage() {
             <Button
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
+              variant="outline"
             >
               Next
             </Button>

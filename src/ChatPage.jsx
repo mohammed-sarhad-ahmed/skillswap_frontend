@@ -61,10 +61,9 @@ export default function ChatPage() {
     init();
   }, [selectedUserId]);
 
-  // Real-time message update
+  // Real-time message update (when receiving)
   useEffect(() => {
     socket.on("receive_message", (message) => {
-      // Update sidebar last message
       setChatUsers((prev) =>
         prev.map((user) => {
           if (
@@ -77,7 +76,6 @@ export default function ChatPage() {
         })
       );
 
-      // Update currently open chat if matches
       if (
         selectedUser &&
         [selectedUser._id, currentUser?._id].includes(message.senderId) &&
@@ -89,6 +87,18 @@ export default function ChatPage() {
 
     return () => socket.off("receive_message");
   }, [selectedUser, currentUser]);
+
+  // ✅ Update sidebar instantly when sending
+  const handleLocalMessageUpdate = (message) => {
+    setChatUsers((prev) =>
+      prev.map((user) => {
+        if (user._id === message.senderId || user._id === message.receiverId) {
+          return { ...user, lastMessage: message };
+        }
+        return user;
+      })
+    );
+  };
 
   if (loading)
     return <p className="text-center mt-10 text-gray-500">Loading chat...</p>;
@@ -169,7 +179,11 @@ export default function ChatPage() {
       {/* Chat area */}
       <div className="flex-1 flex flex-col">
         {selectedUser ? (
-          <ChatBox user={selectedUser} currentUser={currentUser} />
+          <ChatBox
+            user={selectedUser}
+            currentUser={currentUser}
+            onLocalMessage={handleLocalMessageUpdate}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500 text-lg">
             Select a chat to start messaging

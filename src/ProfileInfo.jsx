@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { ArrowLeft, MessageCircle, Flag } from "lucide-react";
+import { ArrowLeft, MessageCircle, Flag, Mail, UserPlus } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
 import toast from "react-hot-toast";
 
-export default function ProfileInfo() {
+export default function ProfileInfo({ isSidebarOpen }) {
   const { userId: id } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Fetch profile user
   useEffect(() => {
@@ -67,151 +68,188 @@ export default function ProfileInfo() {
     }
   };
 
-  if (!user || !currentUser) {
+  const handleConnect = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/connect/${user._id}`, {
+        method: "POST",
+        headers: { auth: getToken() },
+      });
+      if (!res.ok) throw new Error("Failed to connect");
+      toast.success("Connection request sent!");
+      setIsConnected(true);
+    } catch {
+      toast.error("Failed to connect");
+    }
+  };
+
+  if (!user || !currentUser)
     return (
       <div className="flex justify-center items-center h-screen text-lg text-gray-500">
         Loading...
       </div>
     );
-  }
+
+  // Sidebar width in px
+  const sidebarWidth = isSidebarOpen ? 256 : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex flex-col items-center py-10 px-4 relative">
-      {/* Fixed Back Button */}
-      <button
-        onClick={() => navigate("/skills")}
-        className="absolute top-6 left-6 flex items-center gap-2 text-gray-700 hover:text-black bg-white/70 backdrop-blur-md px-4 py-2 rounded-full shadow-md transition"
-      >
-        <ArrowLeft className="h-5 w-5" />
-        <span className="font-medium text-sm">Back</span>
-      </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Back Button */}
+      <div className="px-4 py-4">
+        <Button
+          variant="outline"
+          className="rounded-full shadow-sm border-gray-200 bg-white hover:bg-gray-100 text-gray-700 flex items-center gap-2"
+          style={{ marginLeft: sidebarWidth }}
+          onClick={() => navigate(-1)}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </Button>
+      </div>
 
-      <div className="w-full max-w-5xl mt-12">
-        {/* Profile Header */}
-        <div className="bg-white rounded-3xl shadow-md p-8 flex flex-col items-center text-center">
-          <img
-            src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
-            alt={user.fullName}
-            className="w-36 h-36 rounded-full object-cover shadow-md border-4 border-white"
-          />
-          <h1 className="text-3xl font-bold mt-4 text-gray-900">
-            {user.fullName}
-          </h1>
-          <p className="text-gray-500">{user.email}</p>
-
-          {/* Availability */}
-          {user.availability && (
-            <div className="mt-6 w-full max-w-md text-left">
-              <h2 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-                Availability
-              </h2>
-              <ul className="mt-3 space-y-2">
-                {Object.entries(user.availability).map(([day, info]) => (
-                  <li
-                    key={day}
-                    className="flex justify-between border-b border-gray-100 pb-1 text-gray-700"
-                  >
-                    <span className="font-medium">{day}</span>
-                    {info.off ? (
-                      <span className="text-red-500">Off</span>
-                    ) : (
-                      <span className="text-green-600">
-                        {info.start} - {info.end}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {/* Profile Header */}
+      <div className="max-w-5xl mx-auto text-center mt-6 px-4">
+        <img
+          src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
+          alt={user.fullName}
+          className="w-36 h-36 rounded-full mx-auto border border-gray-300 shadow-sm object-cover"
+        />
+        <h1 className="mt-4 text-3xl font-bold text-gray-900">
+          {user.fullName}
+        </h1>
+        <div className="flex justify-center items-center gap-2 mt-1 text-gray-600">
+          <Mail className="w-4 h-4" />
+          <span>{user.email}</span>
         </div>
 
-        {/* Skills */}
-        <div className="grid lg:grid-cols-2 gap-8 mt-10">
-          {user.teachingSkills?.length > 0 && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-                Teaching Skills
-              </h2>
-              <div className="space-y-5">
-                {user.teachingSkills.map((skill, i) => (
-                  <div
-                    key={i}
-                    className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {skill.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {skill.category} • {skill.level}
-                    </p>
-                    {skill.experience && (
-                      <p className="mt-2 text-gray-700">
-                        <strong>Experience:</strong> {skill.experience} year(s)
-                      </p>
-                    )}
-                    {skill.certifications?.length > 0 && (
-                      <p className="mt-1 text-gray-700">
-                        <strong>Certifications:</strong>{" "}
-                        {skill.certifications.join(", ")}
-                      </p>
-                    )}
-                    {skill.description && (
-                      <p className="mt-2 text-gray-700">{skill.description}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {user.learningSkills?.length > 0 && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-                Learning Skills
-              </h2>
-              <div className="space-y-5">
-                {user.learningSkills.map((skill, i) => (
-                  <div
-                    key={i}
-                    className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {skill.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {skill.category} • {skill.level}
-                    </p>
-                    {skill.description && (
-                      <p className="mt-2 text-gray-700">{skill.description}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-4 justify-center mt-10">
+        {/* Action buttons */}
+        {/* Action buttons */}
+        <div className="flex flex-wrap justify-center gap-3 mt-6">
+          {/* Connect button first */}
           <Button
-            onClick={
-              () => navigate(`/chat/${user._id}`) // redirect to chat page
-            }
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl shadow-md"
+            onClick={handleConnect}
+            disabled={isConnected}
+            className={`flex items-center gap-2 ${
+              isConnected
+                ? "bg-gray-300 text-gray-700"
+                : "bg-green-600 hover:bg-green-700 text-white"
+            } px-6 py-2.5 rounded-full shadow-sm`}
+          >
+            <UserPlus className="h-5 w-5" />
+            {isConnected ? "Connected" : "Connect"}
+          </Button>
+
+          {/* Message button */}
+          <Button
+            onClick={() => navigate(`/chat/${user._id}`)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-full shadow-sm"
           >
             <MessageCircle className="h-5 w-5" />
-            Chat
+            Message
           </Button>
+
+          {/* Report button */}
           <Button
             onClick={handleReport}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-xl shadow-md"
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full shadow-sm"
           >
             <Flag className="h-5 w-5" />
             Report
           </Button>
         </div>
       </div>
+
+      {/* Info Sections */}
+      <div className="max-w-5xl mx-auto mt-12 px-4 space-y-10">
+        {/* Availability */}
+        {user.availability && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+              Availability
+            </h2>
+            <ul className="divide-y text-gray-700">
+              {Object.entries(user.availability).map(([day, info]) => (
+                <li key={day} className="py-2 flex justify-between">
+                  <span className="font-medium">{day}</span>
+                  {info.off ? (
+                    <span className="text-red-500 font-medium">Off</span>
+                  ) : (
+                    <span className="text-green-600 font-medium">
+                      {info.start} - {info.end}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Teaching Skills */}
+        {user.teachingSkills?.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+              Teaching Skills
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {user.teachingSkills.map((skill, i) => (
+                <div
+                  key={i}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition bg-white"
+                >
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {skill.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {skill.category} • {skill.level}
+                  </p>
+                  {skill.experience && (
+                    <p className="mt-2 text-gray-700 text-sm">
+                      <strong>Experience:</strong> {skill.experience} year(s)
+                    </p>
+                  )}
+                  {skill.certifications?.length > 0 && (
+                    <p className="mt-1 text-gray-700 text-sm">
+                      <strong>Certifications:</strong>{" "}
+                      {skill.certifications.join(", ")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Learning Skills */}
+        {user.learningSkills?.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+              Learning Skills
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {user.learningSkills.map((skill, i) => (
+                <div
+                  key={i}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition bg-white"
+                >
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {skill.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {skill.category} • {skill.level}
+                  </p>
+                  {skill.description && (
+                    <p className="mt-2 text-gray-700 text-sm">
+                      {skill.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="h-20" />
     </div>
   );
 }

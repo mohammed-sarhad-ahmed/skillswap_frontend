@@ -8,7 +8,12 @@ import { getToken } from "./ManageToken";
 
 const socket = io(API_BASE_URL, { transports: ["websocket"] });
 
-export default function ChatBox({ user, currentUser, onClose }) {
+export default function ChatBox({
+  user,
+  currentUser,
+  onClose,
+  onLocalMessage,
+}) {
   const [messages, setMessages] = useState([]);
   const [msg, setMsg] = useState("");
   const chatEndRef = useRef(null);
@@ -39,7 +44,8 @@ export default function ChatBox({ user, currentUser, onClose }) {
       .catch((err) => console.log(err.message));
 
     socket.on("receive_message", (message) => {
-      if (message.roomId === roomId) {
+      // ✅ Ignore your own messages (prevents duplicates)
+      if (message.roomId === roomId && message.senderId !== currentUser._id) {
         const msgObj = {
           ...message,
           senderId:
@@ -60,7 +66,7 @@ export default function ChatBox({ user, currentUser, onClose }) {
     };
   }, [roomId, currentUser._id, user._id]);
 
-  // Send message (emit only, no local push)
+  // ✅ Send message (emit + local display + sidebar update)
   const sendMessage = () => {
     if (!msg.trim()) return;
 
@@ -71,13 +77,21 @@ export default function ChatBox({ user, currentUser, onClose }) {
       roomId,
     };
 
+    // Emit message to server
     socket.emit("send_message", newMessage);
+
+    // ✅ Instantly show locally
+    setMessages((prev) => [...prev, newMessage]);
+
+    // ✅ Update sidebar last message
+    onLocalMessage && onLocalMessage(newMessage);
+
     setMsg("");
   };
 
   // Auto-scroll to bottom
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView();
   }, [messages]);
 
   return (
