@@ -38,6 +38,7 @@ export default function ChatBox({
             typeof m.senderId === "object" ? m.senderId._id : m.senderId,
           receiverId:
             typeof m.receiverId === "object" ? m.receiverId._id : m.receiverId,
+          createdAt: m.createdAt || new Date().toISOString(), // ✅ fallback if missing
         }));
         setMessages(msgs);
       })
@@ -56,6 +57,7 @@ export default function ChatBox({
             typeof message.receiverId === "object"
               ? message.receiverId._id
               : message.receiverId,
+          createdAt: message.createdAt || new Date().toISOString(),
         };
         setMessages((prev) => [...prev, msgObj]);
       }
@@ -70,11 +72,14 @@ export default function ChatBox({
   const sendMessage = () => {
     if (!msg.trim()) return;
 
+    const now = new Date().toISOString();
+
     const newMessage = {
       senderId: currentUser._id,
       receiverId: user._id,
       text: msg.trim(),
       roomId,
+      createdAt: now, // ✅ store timestamp
     };
 
     // Emit message to server
@@ -93,6 +98,12 @@ export default function ChatBox({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView();
   }, [messages]);
+
+  // ✅ format time function
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -127,8 +138,8 @@ export default function ChatBox({
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`flex ${
-              m.senderId === currentUser._id ? "justify-end" : "justify-start"
+            className={`flex flex-col ${
+              m.senderId === currentUser._id ? "items-end" : "items-start"
             }`}
           >
             <div
@@ -140,6 +151,9 @@ export default function ChatBox({
             >
               {m.text}
             </div>
+            <span className="text-xs text-gray-400 mt-1">
+              {formatTime(m.createdAt)}
+            </span>
           </div>
         ))}
         <div ref={chatEndRef}></div>

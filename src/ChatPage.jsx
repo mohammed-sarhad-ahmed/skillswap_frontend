@@ -100,6 +100,13 @@ export default function ChatPage() {
     );
   };
 
+  // ✅ time formatter for sidebar
+  const formatTime = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   if (loading)
     return <p className="text-center mt-10 text-gray-500">Loading chat...</p>;
 
@@ -158,6 +165,12 @@ export default function ChatPage() {
                     {user.lastMessage?.text || "No messages yet"}
                   </p>
                 </div>
+                {/* ✅ message time on sidebar */}
+                <span className="text-xs text-gray-400 whitespace-nowrap ml-1">
+                  {user.lastMessage?.createdAt
+                    ? formatTime(user.lastMessage.createdAt)
+                    : ""}
+                </span>
               </div>
             );
           })}
