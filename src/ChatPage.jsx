@@ -101,7 +101,7 @@ export default function ChatPage() {
         [selectedUser._id, currentUser?._id].includes(receiverId)
       ) {
         setSelectedUser((prev) => ({ ...prev, lastMessage: message }));
-        fetch(`${API_BASE_URL}/mark_read/${senderId}`, {
+        fetch(`${API_BASE_URL}/messages/mark_read/${senderId}`, {
           method: "POST",
           headers: { auth: getToken() },
         });
