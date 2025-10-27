@@ -5,13 +5,16 @@ import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
 import toast from "react-hot-toast";
+import io from "socket.io-client";
+
+const socket = io(API_BASE_URL);
 
 export default function ProfileInfo({ isSidebarOpen }) {
   const { userId: id } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState("connect"); // connect, requested, connected, accept
 
   // Fetch profile user
   useEffect(() => {
@@ -42,43 +45,64 @@ export default function ProfileInfo({ isSidebarOpen }) {
         });
         const data = await res.json();
         setCurrentUser(data.data.user);
+        socket.emit("register_user", data.data.user._id);
+
+        if (data.data.user.connections.includes(id))
+          setConnectionState("connected");
+        else if (data.data.user.sentRequests.includes(id))
+          setConnectionState("requested");
+        else if (data.data.user.receivedRequests.includes(id))
+          setConnectionState("accept");
       } catch {
         toast.error("Could not fetch current user info");
       }
     };
     fetchCurrentUser();
-  }, []);
+  }, [id]);
 
-  const handleReport = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/report`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          auth: getToken(),
-        },
-        body: JSON.stringify({ reportedUser: user._id }),
-      });
-
-      const data = await res.json();
-      if (res.ok) toast.success("User reported successfully!");
-      else toast.error(data.message || "Failed to report user");
-    } catch {
-      toast.error("Something went wrong while reporting.");
-    }
-  };
+  // Listen to socket events
+  useEffect(() => {
+    socket.on("connection_request", ({ from }) => {
+      if (from === id) setConnectionState("accept");
+    });
+    socket.on("connection_update", ({ from, to, status }) => {
+      if (to === id || from === id) {
+        if (status === "accepted") setConnectionState("connected");
+        if (status === "cancelled") setConnectionState("connect");
+      }
+    });
+    return () => {
+      socket.off("connection_request");
+      socket.off("connection_update");
+    };
+  }, [id]);
 
   const handleConnect = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/user/connect/${user._id}`, {
-        method: "POST",
-        headers: { auth: getToken() },
+    if (!currentUser || !user) return;
+    if (connectionState === "connect") {
+      socket.emit("send_connection_request", {
+        from: currentUser._id,
+        to: user._id,
       });
-      if (!res.ok) throw new Error("Failed to connect");
+      setConnectionState("requested");
       toast.success("Connection request sent!");
-      setIsConnected(true);
-    } catch {
-      toast.error("Failed to connect");
+    } else if (
+      connectionState === "requested" ||
+      connectionState === "connected"
+    ) {
+      socket.emit("cancel_connection_request", {
+        from: currentUser._id,
+        to: user._id,
+      });
+      setConnectionState("connect");
+      toast.success("Connection cancelled");
+    } else if (connectionState === "accept") {
+      socket.emit("accept_connection_request", {
+        from: user._id,
+        to: currentUser._id,
+      });
+      setConnectionState("connected");
+      toast.success("Connection accepted");
     }
   };
 
@@ -89,7 +113,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
       </div>
     );
 
-  // Sidebar width in px
   const sidebarWidth = isSidebarOpen ? 256 : 0;
 
   return (
@@ -123,20 +146,27 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
 
         {/* Action buttons */}
-        {/* Action buttons */}
         <div className="flex flex-wrap justify-center gap-3 mt-6">
-          {/* Connect button first */}
           <Button
             onClick={handleConnect}
-            disabled={isConnected}
-            className={`flex items-center gap-2 ${
-              isConnected
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-full shadow-sm ${
+              connectionState === "connected"
                 ? "bg-gray-300 text-gray-700"
-                : "bg-green-600 hover:bg-green-700 text-white"
-            } px-6 py-2.5 rounded-full shadow-sm`}
+                : connectionState === "requested"
+                ? "bg-yellow-500 text-white"
+                : connectionState === "accept"
+                ? "bg-blue-600 text-white"
+                : "bg-green-600 text-white"
+            }`}
           >
             <UserPlus className="h-5 w-5" />
-            {isConnected ? "Connected" : "Connect"}
+            {connectionState === "connect"
+              ? "Connect"
+              : connectionState === "requested"
+              ? "Requested"
+              : connectionState === "accept"
+              ? "Accept"
+              : "Connected"}
           </Button>
 
           {/* Message button */}
@@ -150,7 +180,23 @@ export default function ProfileInfo({ isSidebarOpen }) {
 
           {/* Report button */}
           <Button
-            onClick={handleReport}
+            onClick={async () => {
+              try {
+                const res = await fetch(`${API_BASE_URL}/report`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    auth: getToken(),
+                  },
+                  body: JSON.stringify({ reportedUser: user._id }),
+                });
+                const data = await res.json();
+                if (res.ok) toast.success("User reported successfully!");
+                else toast.error(data.message || "Failed to report user");
+              } catch {
+                toast.error("Something went wrong while reporting.");
+              }
+            }}
             className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full shadow-sm"
           >
             <Flag className="h-5 w-5" />

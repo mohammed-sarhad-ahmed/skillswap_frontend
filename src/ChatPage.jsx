@@ -84,14 +84,19 @@ export default function ChatPage() {
         }
 
         const updatedUser = {
-          ...(index !== -1 ? users[index] : {}),
-          _id: otherId,
+          ...(index !== -1
+            ? users[index]
+            : { _id: otherId, fullName: "New User" }),
           lastMessage: message,
           unread,
         };
 
         if (index !== -1) users.splice(index, 1);
         users.unshift(updatedUser);
+
+        // ⚡ If no selected user yet, set it automatically
+        if (!selectedUser) setSelectedUser(updatedUser);
+
         return users;
       });
 
