@@ -22,9 +22,11 @@ import {
 } from "./components/ui/sidebar";
 
 import { NavLink, useNavigate } from "react-router";
-
 import { getToken, removeToken } from "./ManageToken";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import io from "socket.io-client";
+
+const socket = io(API_BASE_URL);
 
 const navItems = [
   { title: "Sessions", to: "/sessions", icon: ClipboardList },
@@ -36,32 +38,45 @@ const navItems = [
 
 export default function AppSidebar() {
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {}, []);
+  // Fetch unread notifications count
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+          headers: { auth: getToken() },
+        });
+        const data = await res.json();
+        setUnreadCount(data.count || 0);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchUnread();
+
+    // Listen real-time notifications
+    socket.on("new_notification", () => {
+      setUnreadCount((c) => c + 1);
+    });
+  }, []);
 
   const handleLogout = async () => {
     try {
       const token = getToken();
-
       if (token) {
         const res = await fetch(`${API_BASE_URL}/auth/logout`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
         });
-
-        if (!res.ok) {
-          throw new Error("Server responded with error");
-        }
+        if (!res.ok) throw new Error("Server error");
       }
-
       removeToken();
-      SidebarGroup;
       location.href = "/login";
     } catch (err) {
-      console.error("Logout failed:", err);
+      console.error(err);
       removeToken();
       location.href = "/login";
     }
@@ -98,6 +113,30 @@ export default function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* Notifications link */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink
+                    to="/notifications"
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
+                        isActive
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+                      } relative`
+                    }
+                  >
+                    <MessageCircleCodeIcon className="h-5 w-5" />
+                    <span>Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="absolute right-3 top-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

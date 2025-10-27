@@ -40,6 +40,8 @@ export default function App() {
             <Route path="/buy-credits" element={<BuyCredit />} />
             <Route path="/chat/:userId" element={<ChatPage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/notifications" element={<Notification />} />
+
             <Route path="/" element={<ProfilePage />} />
           </Route>
         </Route>
