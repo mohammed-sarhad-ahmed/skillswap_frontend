@@ -21,7 +21,9 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [connectionState, setConnectionState] = useState("connect"); // connect, requested, connected, accept
+  const [connectionState, setConnectionState] = useState("connect");
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
 
   // Fetch profile user
   useEffect(() => {
@@ -71,7 +73,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
     fetchCurrentUser();
   }, [id]);
 
-  // Listen to socket events
+  // Socket events
   useEffect(() => {
     socket.on("connection_request", ({ from }) => {
       if (from === id) setConnectionState("accept");
@@ -118,6 +120,30 @@ export default function ProfileInfo({ isSidebarOpen }) {
     }
   };
 
+  const handleReportSubmit = async () => {
+    if (!reportReason) {
+      toast.error("Please select a reason");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          auth: getToken(),
+        },
+        body: JSON.stringify({ reportedUser: user._id, reason: reportReason }),
+      });
+      const data = await res.json();
+      if (res.ok) toast.success("User reported successfully!");
+      else toast.error(data.message || "Failed to report user");
+      setShowReportModal(false);
+      setReportReason("");
+    } catch {
+      toast.error("Something went wrong while reporting.");
+    }
+  };
+
   if (!user || !currentUser)
     return (
       <div className="flex justify-center items-center h-screen text-lg text-gray-500">
@@ -128,7 +154,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const sidebarWidth = isSidebarOpen ? 256 : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 relative">
       {/* Back Button */}
       <div className="px-4 py-4">
         <Button
@@ -152,10 +178,16 @@ export default function ProfileInfo({ isSidebarOpen }) {
         <h1 className="mt-4 text-3xl font-bold text-gray-900">
           {user.fullName}
         </h1>
+
         <div className="flex justify-center items-center gap-2 mt-1 text-gray-600">
           <Mail className="w-4 h-4" />
           <span>{user.email}</span>
         </div>
+
+        {/* Connection count */}
+        <p className="text-sm text-gray-500 mt-1">
+          🔗 {user.connections?.length || 0} Connections
+        </p>
 
         {/* Action buttons */}
         <div className="flex flex-wrap justify-center gap-3 mt-6">
@@ -198,7 +230,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
             </Button>
           )}
 
-          {/* Message button */}
+          {/* Message */}
           <Button
             onClick={() => navigate(`/chat/${user._id}`)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-full shadow-sm"
@@ -207,25 +239,9 @@ export default function ProfileInfo({ isSidebarOpen }) {
             Message
           </Button>
 
-          {/* Report button */}
+          {/* Report */}
           <Button
-            onClick={async () => {
-              try {
-                const res = await fetch(`${API_BASE_URL}/report`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    auth: getToken(),
-                  },
-                  body: JSON.stringify({ reportedUser: user._id }),
-                });
-                const data = await res.json();
-                if (res.ok) toast.success("User reported successfully!");
-                else toast.error(data.message || "Failed to report user");
-              } catch {
-                toast.error("Something went wrong while reporting.");
-              }
-            }}
+            onClick={() => setShowReportModal(true)}
             className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full shadow-sm"
           >
             <Flag className="h-5 w-5" />
@@ -234,9 +250,57 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
       </div>
 
-      {/* Info Sections */}
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96 shadow-lg relative">
+            <button
+              onClick={() => setShowReportModal(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              Report {user.fullName}
+            </h2>
+            <p className="text-sm text-gray-600 mb-3">
+              Select a reason for reporting:
+            </p>
+
+            <select
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-red-500 focus:outline-none"
+            >
+              <option value="">-- Choose a reason --</option>
+              <option value="spam">Spam or scam</option>
+              <option value="harassment">Harassment or bullying</option>
+              <option value="inappropriate">Inappropriate content</option>
+              <option value="fake">Fake account</option>
+              <option value="other">Other</option>
+            </select>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={() => setShowReportModal(false)}
+                variant="outline"
+                className="px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReportSubmit}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+              >
+                Submit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info sections remain unchanged */}
       <div className="max-w-5xl mx-auto mt-12 px-4 space-y-10">
-        {/* Availability */}
         {user.availability && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
@@ -259,7 +323,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
           </div>
         )}
 
-        {/* Teaching Skills */}
         {user.teachingSkills?.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
@@ -294,7 +357,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
           </div>
         )}
 
-        {/* Learning Skills */}
         {user.learningSkills?.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">

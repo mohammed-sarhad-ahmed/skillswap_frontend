@@ -75,12 +75,9 @@ export default function SkillsPage() {
 
   return (
     <>
-      <Toaster />
-
-      {/* Filters */}
-      <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-center gap-3 w-full max-w-5xl mx-auto">
+      <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 w-full max-w-5xl mx-auto">
         {/* Search Bar */}
-        <div className="flex-1">
+        <div className="w-full md:flex-1">
           <Input
             placeholder="Search by name or skill..."
             value={search}
@@ -93,14 +90,14 @@ export default function SkillsPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 mt-3 md:mt-0">
+        <div className="flex flex-wrap gap-3 mt-3 md:mt-0 w-full md:w-auto">
           <select
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
               setCurrentPage(1);
             }}
-            className="h-14 rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="h-14 flex-1 md:flex-none rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           >
             <option value="">All Categories</option>
             <option value="Math">Math</option>
@@ -121,7 +118,7 @@ export default function SkillsPage() {
               setLevel(e.target.value);
               setCurrentPage(1);
             }}
-            className="h-14 rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="h-14 flex-1 md:flex-none rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           >
             <option value="">All Levels</option>
             <option value="Beginner">Beginner</option>
@@ -136,74 +133,88 @@ export default function SkillsPage() {
       <div className="flex flex-col min-h-screen p-4 md:p-6 bg-gray-50">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentUsers.length > 0 ? (
-            currentUsers.map((user) => (
-              <Card
-                key={user._id}
-                className="flex flex-col items-center text-center p-6 justify-between h-full rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1"
-              >
-                <div className="flex flex-col items-center space-y-3">
-                  <img
-                    src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
-                    alt={user.fullName}
-                    className="w-28 h-28 rounded-full object-cover border-4 border-blue-500/40"
-                  />
-                  <CardHeader className="w-full text-center p-0">
-                    <CardTitle className="text-lg font-semibold capitalize text-gray-800">
-                      {user.fullName}
-                    </CardTitle>
-                  </CardHeader>
+            currentUsers.map((user) => {
+              const teachingSkills = user.teachingSkills || [];
+              const learningSkills = user.learningSkills || [];
+              const allSkills = [...teachingSkills, ...learningSkills];
 
-                  <CardContent className="p-0">
-                    <CardDescription>
-                      <div className="flex flex-col items-center">
-                        {user.teachingSkills?.length > 0 && (
-                          <>
-                            <p className="font-semibold mt-2 text-blue-600">
-                              Teaching:
-                            </p>
-                            <div className="flex flex-wrap gap-2 justify-center mt-1">
-                              {user.teachingSkills.map((skill, idx) => (
-                                <span
-                                  key={`teach-${idx}`}
-                                  className="bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
-                                >
-                                  {skill.name} ({skill.level})
-                                </span>
-                              ))}
-                            </div>
-                          </>
-                        )}
-
-                        {user.learningSkills?.length > 0 && (
-                          <>
-                            <p className="font-semibold mt-3 text-green-600">
-                              Learning:
-                            </p>
-                            <div className="flex flex-wrap gap-2 justify-center mt-1">
-                              {user.learningSkills.map((skill, idx) => (
-                                <span
-                                  key={`learn-${idx}`}
-                                  className="bg-green-500/10 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-300"
-                                >
-                                  {skill.name} ({skill.level})
-                                </span>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </CardDescription>
-                  </CardContent>
-                </div>
-
-                <Button
-                  className="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
-                  onClick={() => navigate(`/profile-info/${user._id}`)}
+              return (
+                <Card
+                  key={user._id}
+                  className="flex flex-col items-center text-center p-6 justify-between h-full rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1"
                 >
-                  View Profile
-                </Button>
-              </Card>
-            ))
+                  <div className="flex flex-col items-center space-y-3 w-full">
+                    <img
+                      src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
+                      alt={user.fullName}
+                      className="w-28 h-28 rounded-full object-cover border-4 border-blue-500/40"
+                    />
+                    <CardHeader className="w-full text-center p-0">
+                      <CardTitle className="text-lg font-semibold capitalize text-gray-800">
+                        {user.fullName}
+                      </CardTitle>
+                    </CardHeader>
+
+                    <CardContent className="p-0 w-full">
+                      <CardDescription>
+                        <div className="flex flex-col items-center w-full">
+                          {allSkills.length > 0 ? (
+                            <>
+                              {teachingSkills.length > 0 && (
+                                <>
+                                  <p className="font-semibold mt-2 text-blue-600">
+                                    Teaching:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2 justify-center mt-1">
+                                    {teachingSkills.map((skill, idx) => (
+                                      <span
+                                        key={`teach-${idx}`}
+                                        className="bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
+                                      >
+                                        {skill.name} ({skill.level})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+
+                              {learningSkills.length > 0 && (
+                                <>
+                                  <p className="font-semibold mt-3 text-green-600">
+                                    Learning:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2 justify-center mt-1">
+                                    {learningSkills.map((skill, idx) => (
+                                      <span
+                                        key={`learn-${idx}`}
+                                        className="bg-green-500/10 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-300"
+                                      >
+                                        {skill.name} ({skill.level})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-gray-400 italic mt-2">
+                              No skills have been specified
+                            </p>
+                          )}
+                        </div>
+                      </CardDescription>
+                    </CardContent>
+                  </div>
+
+                  <Button
+                    className="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
+                    onClick={() => navigate(`/profile-info/${user._id}`)}
+                  >
+                    View Profile
+                  </Button>
+                </Card>
+              );
+            })
           ) : (
             <p className="col-span-full text-center text-gray-500 mt-8">
               No users found.

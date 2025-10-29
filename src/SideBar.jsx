@@ -7,6 +7,7 @@ import {
   LogOut,
   MessageCircleCodeIcon,
   Bell,
+  Search,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -22,7 +23,7 @@ import {
   SidebarMenuItem,
 } from "./components/ui/sidebar";
 
-import { NavLink, useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { getToken, removeToken } from "./ManageToken";
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
@@ -32,14 +33,22 @@ const socket = io(API_BASE_URL);
 const navItems = [
   { title: "Sessions", to: "/sessions", icon: ClipboardList },
   { title: "Appointments", to: "/appointments", icon: Calendar },
-  { title: "Skills", to: "/skills", icon: Settings },
+  { title: "Find Teacher", to: "/skills", icon: Search },
   { title: "Buy Credits", to: "/buy-credits", icon: CreditCard },
   { title: "Chats", to: "/Chat", icon: MessageCircleCodeIcon },
+  { title: "Connections", to: "/ConnectionPage", icon: User },
 ];
 
 export default function AppSidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activePath, setActivePath] = useState(location.pathname);
+
+  // Update activePath whenever URL changes
+  useEffect(() => {
+    setActivePath(location.pathname);
+  }, [location.pathname]);
 
   // Fetch unread notifications count
   useEffect(() => {
@@ -57,7 +66,6 @@ export default function AppSidebar() {
 
     fetchUnread();
 
-    // Listen real-time notifications
     socket.on("new_notification", () => {
       setUnreadCount((c) => c + 1);
     });
@@ -83,6 +91,33 @@ export default function AppSidebar() {
     }
   };
 
+  const activeClass = "bg-blue-100 text-blue-700 border-l-4 border-blue-500";
+  const inactiveClass = "text-slate-600 hover:bg-blue-50 hover:text-blue-600";
+
+  const renderNavItem = (item) => {
+    const isActive =
+      activePath === item.to || activePath.startsWith(item.to + "/");
+
+    return (
+      <SidebarMenuItem key={item.title}>
+        <SidebarMenuButton asChild>
+          <button
+            onClick={() => {
+              setActivePath(item.to);
+              navigate(item.to);
+            }}
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium w-full text-left transition-colors ${
+              isActive ? activeClass : inactiveClass
+            }`}
+          >
+            <item.icon className="h-5 w-5" />
+            <span>{item.title}</span>
+          </button>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
   return (
     <Sidebar className="bg-white border-r border-slate-200">
       <SidebarContent>
@@ -95,38 +130,21 @@ export default function AppSidebar() {
 
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.to}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                          isActive
-                            ? "bg-blue-100 text-blue-700"
-                            : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-                        }`
-                      }
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems.map(renderNavItem)}
 
-              {/* Notifications link */}
+              {/* Notifications */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink
-                    to="/ConnectionRequests"
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                        isActive
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-                      } relative`
-                    }
+                  <button
+                    onClick={() => {
+                      setActivePath("/ConnectionRequests");
+                      navigate("/ConnectionRequests");
+                    }}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium w-full text-left relative transition-colors ${
+                      activePath === "/ConnectionRequests"
+                        ? activeClass
+                        : inactiveClass
+                    }`}
                   >
                     <Bell className="h-5 w-5" />
                     <span>Connection Requests</span>
@@ -135,7 +153,7 @@ export default function AppSidebar() {
                         {unreadCount}
                       </span>
                     )}
-                  </NavLink>
+                  </button>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -147,19 +165,18 @@ export default function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <NavLink
-                to="/profile"
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    isActive
-                      ? "bg-blue-100 text-blue-700"
-                      : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-                  }`
-                }
+              <button
+                onClick={() => {
+                  setActivePath("/profile");
+                  navigate("/profile");
+                }}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium w-full text-left transition-colors ${
+                  activePath === "/profile" ? activeClass : inactiveClass
+                }`}
               >
                 <User className="h-5 w-5" />
                 <span>Profile</span>
-              </NavLink>
+              </button>
             </SidebarMenuButton>
           </SidebarMenuItem>
 

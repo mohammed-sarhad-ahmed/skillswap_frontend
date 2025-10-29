@@ -17,6 +17,7 @@ import BuyCredit from "./BuyCredit";
 import ProfileInfo from "./ProfileInfo";
 import ChatPage from "./ChatPage";
 import ConnectionRequestsPage from "./ConnectionRequestsPage";
+import ConnectionsPage from "./ConnectionPage";
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
               path="/ConnectionRequests"
               element={<ConnectionRequestsPage />}
             />
+            <Route path="/ConnectionPage" element={<ConnectionsPage />} />
 
             <Route path="/" element={<ProfilePage />} />
           </Route>
