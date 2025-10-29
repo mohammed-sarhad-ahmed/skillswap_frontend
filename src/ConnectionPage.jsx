@@ -163,6 +163,7 @@ export default function ConnectionsPage() {
   };
 
   return (
+    <>
       <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 w-full max-w-5xl mx-auto">
         {/* Search Bar */}
         <div className="w-full md:flex-1">
