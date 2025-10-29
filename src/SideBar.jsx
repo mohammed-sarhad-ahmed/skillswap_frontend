@@ -6,6 +6,7 @@ import {
   User,
   LogOut,
   MessageCircleCodeIcon,
+  Bell,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -118,7 +119,7 @@ export default function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <NavLink
-                    to="/notifications"
+                    to="/ConnectionRequests"
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
                         isActive
@@ -127,8 +128,8 @@ export default function AppSidebar() {
                       } relative`
                     }
                   >
-                    <MessageCircleCodeIcon className="h-5 w-5" />
-                    <span>Notifications</span>
+                    <Bell className="h-5 w-5" />
+                    <span>Connection Requests</span>
                     {unreadCount > 0 && (
                       <span className="absolute right-3 top-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
                         {unreadCount}

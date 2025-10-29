@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { ArrowLeft, MessageCircle, Flag, Mail, UserPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  MessageCircle,
+  Flag,
+  Mail,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
@@ -44,15 +51,19 @@ export default function ProfileInfo({ isSidebarOpen }) {
           },
         });
         const data = await res.json();
-        setCurrentUser(data.data.user);
-        socket.emit("register_user", data.data.user._id);
+        const me = data.data.user;
+        setCurrentUser(me);
+        socket.emit("register_user", me._id);
 
-        if (data.data.user.connections.includes(id))
+        const targetId = String(id);
+
+        if (me.connections.map(String).includes(targetId))
           setConnectionState("connected");
-        else if (data.data.user.sentRequests.includes(id))
+        else if (me.sentRequests.map(String).includes(targetId))
           setConnectionState("requested");
-        else if (data.data.user.receivedRequests.includes(id))
+        else if (me.receivedRequests.map(String).includes(targetId))
           setConnectionState("accept");
+        else setConnectionState("connect");
       } catch {
         toast.error("Could not fetch current user info");
       }
@@ -69,6 +80,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
       if (to === id || from === id) {
         if (status === "accepted") setConnectionState("connected");
         if (status === "cancelled") setConnectionState("connect");
+        if (status === "rejected") setConnectionState("connect");
       }
     });
     return () => {
@@ -168,6 +180,23 @@ export default function ProfileInfo({ isSidebarOpen }) {
               ? "Accept"
               : "Connected"}
           </Button>
+
+          {connectionState === "accept" && (
+            <Button
+              onClick={() => {
+                socket.emit("cancel_connection_request", {
+                  from: user._id,
+                  to: currentUser._id,
+                });
+                setConnectionState("connect");
+                toast.success("Connection rejected");
+              }}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full shadow-sm"
+            >
+              <X className="h-5 w-5" />
+              Reject
+            </Button>
+          )}
 
           {/* Message button */}
           <Button
