@@ -27,7 +27,6 @@ export default function ConnectionRequestsPage() {
 
         socket.emit("register_user", data.data.user._id);
 
-        // 🔹 Listen for connection-related notifications
         socket.on("notification", async (notif) => {
           if (notif.type !== "connection_request") return;
 
@@ -47,7 +46,6 @@ export default function ConnectionRequestsPage() {
           setNotifications((prev) => [notif, ...prev]);
         });
 
-        // 🔹 Handle connection status updates
         socket.on("connection_update", ({ from, to, status }) => {
           setNotifications((prev) =>
             prev.map((n) =>
@@ -64,7 +62,7 @@ export default function ConnectionRequestsPage() {
     fetchUser();
   }, []);
 
-  // 🔹 Step 2: Load connection requests & handle "seen twice"
+  // 🔹 Step 2: Load connection requests & mark new ones immediately
   useEffect(() => {
     if (!user) return;
 
@@ -79,13 +77,11 @@ export default function ConnectionRequestsPage() {
           (n) => n.type === "connection_request"
         );
 
-        // 🔹 get previous notif IDs from localStorage
         const prevIds = JSON.parse(
           localStorage.getItem("prevConnectionRequests") || "[]"
         );
         const currentIds = filtered.map((n) => n._id);
 
-        // 🔹 mark which ones existed before or already read
         const updated = filtered.map((n) => ({
           ...n,
           seenTwice: n.read || prevIds.includes(n._id),
@@ -93,20 +89,26 @@ export default function ConnectionRequestsPage() {
 
         setNotifications(updated);
 
-        // 🔹 mark seen notifications as read on server if already seen
-        const seenIds = updated.filter((n) => n.seenTwice).map((n) => n._id);
-        if (seenIds.length > 0) {
+        // 🧠 Immediately mark unseen notifications as read
+        const newlySeen = updated.filter((n) => !n.seenTwice).map((n) => n._id);
+        if (newlySeen.length > 0) {
           await fetch(`${API_BASE_URL}/notifications/mark-many-read`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               auth: getToken(),
             },
-            body: JSON.stringify({ ids: seenIds }),
+            body: JSON.stringify({ ids: newlySeen }),
           });
+
+          // ✅ Instantly update local state so “NEW” disappears now
+          setNotifications((prev) =>
+            prev.map((n) =>
+              newlySeen.includes(n._id) ? { ...n, seenTwice: true } : n
+            )
+          );
         }
 
-        // 🔹 save current IDs for next visit
         localStorage.setItem(
           "prevConnectionRequests",
           JSON.stringify(currentIds)
@@ -197,7 +199,6 @@ export default function ConnectionRequestsPage() {
                 </p>
 
                 <div className="flex gap-2 flex-wrap">
-                  {/* 🔹 Show Accept/Reject ONLY if it's a "sent you a connection request" message */}
                   {notif.content.includes("sent you a connection request") &&
                     !notif.status && (
                       <>
