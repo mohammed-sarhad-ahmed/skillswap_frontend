@@ -104,7 +104,13 @@ export default function ChatBox({
   // ✅ format time function
   const formatTime = (iso) => {
     const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (

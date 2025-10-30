@@ -27,7 +27,7 @@ export default function ConnectionRequestsPage() {
 
         socket.emit("register_user", data.data.user._id);
 
-        // 🔹 Listen only for connection-related notifications
+        // 🔹 Listen for connection-related notifications
         socket.on("notification", async (notif) => {
           if (notif.type !== "connection_request") return;
 
@@ -43,6 +43,7 @@ export default function ConnectionRequestsPage() {
               notif.from = { _id: notif.from };
             }
           }
+
           setNotifications((prev) => [notif, ...prev]);
         });
 
@@ -63,7 +64,7 @@ export default function ConnectionRequestsPage() {
     fetchUser();
   }, []);
 
-  // 🔹 Step 2: Load connection requests & mark them all as read on page open
+  // 🔹 Step 2: Load connection requests & handle "seen twice"
   useEffect(() => {
     if (!user) return;
 
@@ -78,18 +79,22 @@ export default function ConnectionRequestsPage() {
           (n) => n.type === "connection_request"
         );
 
-        setNotifications(filtered);
-
         // 🔹 get previous notif IDs from localStorage
         const prevIds = JSON.parse(
           localStorage.getItem("prevConnectionRequests") || "[]"
         );
         const currentIds = filtered.map((n) => n._id);
 
-        // find which ones existed before (means seen twice)
-        const seenIds = currentIds.filter((id) => prevIds.includes(id));
+        // 🔹 mark which ones existed before or already read
+        const updated = filtered.map((n) => ({
+          ...n,
+          seenTwice: n.read || prevIds.includes(n._id),
+        }));
 
-        // mark only those as read
+        setNotifications(updated);
+
+        // 🔹 mark seen notifications as read on server if already seen
+        const seenIds = updated.filter((n) => n.seenTwice).map((n) => n._id);
         if (seenIds.length > 0) {
           await fetch(`${API_BASE_URL}/notifications/mark-many-read`, {
             method: "POST",
@@ -101,7 +106,7 @@ export default function ConnectionRequestsPage() {
           });
         }
 
-        // save current notifs for next visit
+        // 🔹 save current IDs for next visit
         localStorage.setItem(
           "prevConnectionRequests",
           JSON.stringify(currentIds)
@@ -176,21 +181,25 @@ export default function ConnectionRequestsPage() {
               </div>
 
               <div className="flex-1">
-                <p className="text-gray-800 text-[15px] leading-snug mb-2">
-                  {notif.content}
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-800 text-[15px] leading-snug">
+                    {notif.content}
+                  </p>
+                  {!notif.status && !notif.seenTwice && (
+                    <span className="ml-2 text-[11px] font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                      NEW
+                    </span>
+                  )}
+                </div>
+
                 <p className="text-xs text-gray-500 mb-3">
                   {new Date(notif.createdAt).toLocaleString()}
                 </p>
 
                 <div className="flex gap-2 flex-wrap">
-                  {!notif.read &&
-                    !notif.content.includes(
-                      "accepted your connection request"
-                    ) &&
-                    !notif.content.includes(
-                      "rejected your connection request"
-                    ) && (
+                  {/* 🔹 Show Accept/Reject ONLY if it's a "sent you a connection request" message */}
+                  {notif.content.includes("sent you a connection request") &&
+                    !notif.status && (
                       <>
                         <Button
                           size="sm"
@@ -219,17 +228,13 @@ export default function ConnectionRequestsPage() {
                     <User size={16} /> View Profile
                   </Button>
 
-                  {notif.content.includes(
-                    "accepted your connection request"
-                  ) && (
+                  {notif.status === "accepted" && (
                     <span className="text-xs font-medium text-green-600 bg-green-100 rounded-full px-3 py-1">
                       ✅ Connected
                     </span>
                   )}
                 </div>
               </div>
-
-              {/* 🔹 No “NEW” badge anymore since everything gets marked read */}
             </div>
           ))
         )}
