@@ -24,20 +24,22 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const [connectionState, setConnectionState] = useState("connect");
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [showUnconnectModal, setShowUnconnectModal] = useState(false); // 👈 NEW
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/teacher/${id}`, {
+        headers: { auth: getToken() },
+      });
+      const data = await res.json();
+      setUser(data.data.user);
+    } catch {
+      toast.error("Could not fetch user info");
+    }
+  };
 
   // Fetch profile user
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/user/teacher/${id}`, {
-          headers: { auth: getToken() },
-        });
-        const data = await res.json();
-        setUser(data.data.user);
-      } catch {
-        toast.error("Could not fetch user info");
-      }
-    };
     fetchUser();
   }, [id]);
 
@@ -83,6 +85,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
         if (status === "accepted") setConnectionState("connected");
         if (status === "cancelled") setConnectionState("connect");
         if (status === "rejected") setConnectionState("connect");
+        fetchUser(); // 👈 REFRESH connection count in realtime
       }
     });
     return () => {
@@ -93,6 +96,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
 
   const handleConnect = async () => {
     if (!currentUser || !user) return;
+
     if (connectionState === "connect") {
       socket.emit("send_connection_request", {
         from: currentUser._id,
@@ -100,16 +104,16 @@ export default function ProfileInfo({ isSidebarOpen }) {
       });
       setConnectionState("requested");
       toast.success("Connection request sent!");
-    } else if (
-      connectionState === "requested" ||
-      connectionState === "connected"
-    ) {
+    } else if (connectionState === "requested") {
       socket.emit("cancel_connection_request", {
         from: currentUser._id,
         to: user._id,
       });
       setConnectionState("connect");
       toast.success("Connection cancelled");
+    } else if (connectionState === "connected") {
+      // 👇 Show confirmation modal instead of directly unconnecting
+      setShowUnconnectModal(true);
     } else if (connectionState === "accept") {
       socket.emit("accept_connection_request", {
         from: user._id,
@@ -118,6 +122,16 @@ export default function ProfileInfo({ isSidebarOpen }) {
       setConnectionState("connected");
       toast.success("Connection accepted");
     }
+  };
+
+  const confirmUnconnect = () => {
+    socket.emit("cancel_connection_request", {
+      from: currentUser._id,
+      to: user._id,
+    });
+    setConnectionState("connect");
+    toast.success("Unconnected successfully");
+    setShowUnconnectModal(false);
   };
 
   const handleReportSubmit = async () => {
@@ -207,10 +221,10 @@ export default function ProfileInfo({ isSidebarOpen }) {
             {connectionState === "connect"
               ? "Connect"
               : connectionState === "requested"
-              ? "Requested"
+              ? "Cancel Request"
               : connectionState === "accept"
               ? "Accept"
-              : "Connected"}
+              : "unconnect"}
           </Button>
 
           {connectionState === "accept" && (
@@ -250,6 +264,35 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
       </div>
 
+      {/* ✅ Unconnect Confirmation Modal */}
+      {showUnconnectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
+          <div className="bg-white rounded-xl p-6 w-80 shadow-lg relative text-center">
+            <h2 className="text-xl font-semibold text-gray-800 mb-3">
+              Unconnect from {user.fullName}?
+            </h2>
+            <p className="text-sm text-gray-600 mb-5">
+              Are you sure you want to remove this connection?
+            </p>
+            <div className="flex justify-center gap-3">
+              <Button
+                onClick={() => setShowUnconnectModal(false)}
+                variant="outline"
+                className="px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmUnconnect}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+              >
+                Unconnect
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Report Modal */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
@@ -279,6 +322,15 @@ export default function ProfileInfo({ isSidebarOpen }) {
               <option value="fake">Fake account</option>
               <option value="other">Other</option>
             </select>
+
+            {/* 👇 Show text area if "Other" is selected */}
+            {reportReason === "other" && (
+              <textarea
+                placeholder="Please describe the issue..."
+                onChange={(e) => setReportReason(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-red-500 focus:outline-none"
+              />
+            )}
 
             <div className="flex justify-end gap-2">
               <Button
