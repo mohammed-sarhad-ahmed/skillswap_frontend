@@ -28,7 +28,10 @@ export default function ConnectionRequestsPage() {
         socket.emit("register_user", data.data.user._id);
 
         socket.on("notification", async (notif) => {
-          if (notif.type !== "connection_request") return;
+          if (
+            !["connection_request", "connection_accepted"].includes(notif.type)
+          )
+            return;
 
           if (typeof notif.from === "string") {
             try {
@@ -50,7 +53,7 @@ export default function ConnectionRequestsPage() {
           setNotifications((prev) =>
             prev.map((n) =>
               n.from?._id === from && n.type === "connection_request"
-                ? { ...n, read: true, status }
+                ? { ...n, status }
                 : n
             )
           );
@@ -59,10 +62,11 @@ export default function ConnectionRequestsPage() {
         toast.error("Failed to load user");
       }
     };
+
     fetchUser();
   }, []);
 
-  // 🔹 Step 2: Load connection requests & mark new ones immediately
+  // 🔹 Step 2: Load notifications
   useEffect(() => {
     if (!user) return;
 
@@ -73,45 +77,12 @@ export default function ConnectionRequestsPage() {
         });
         const data = await res.json();
 
-        const filtered = data.data.notifications.filter(
-          (n) => n.type === "connection_request"
+        const filtered = data.data.notifications.filter((n) =>
+          ["connection_request", "connection_accepted"].includes(n.type)
         );
 
-        const prevIds = JSON.parse(
-          localStorage.getItem("prevConnectionRequests") || "[]"
-        );
-        const currentIds = filtered.map((n) => n._id);
-
-        const updated = filtered.map((n) => ({
-          ...n,
-          seenTwice: n.read || prevIds.includes(n._id),
-        }));
-
-        setNotifications(updated);
-
-        const newlySeen = updated.filter((n) => !n.seenTwice).map((n) => n._id);
-        if (newlySeen.length > 0) {
-          await fetch(`${API_BASE_URL}/notifications/mark-many-read`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              auth: getToken(),
-            },
-            body: JSON.stringify({ ids: newlySeen }),
-          });
-
-          setNotifications((prev) =>
-            prev.map((n) =>
-              newlySeen.includes(n._id) ? { ...n, seenTwice: true } : n
-            )
-          );
-        }
-
-        localStorage.setItem(
-          "prevConnectionRequests",
-          JSON.stringify(currentIds)
-        );
-      } catch (err) {
+        setNotifications(filtered);
+      } catch {
         toast.error("Failed to load notifications");
       }
     };
@@ -120,40 +91,81 @@ export default function ConnectionRequestsPage() {
   }, [user]);
 
   // 🔹 Step 3: Handle Accept
-  const handleAccept = (notif) => {
+  const handleAccept = async (notif) => {
     socket.emit("accept_connection_request", {
       notifId: notif._id,
       from: notif.from._id,
       to: user._id,
     });
 
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n._id === notif._id ? { ...n, read: true, status: "accepted" } : n
-      )
-    );
+    try {
+      await fetch(
+        `${API_BASE_URL}/user/connections/delete-notification/${notif._id}`,
+        {
+          method: "DELETE",
+          headers: { auth: getToken() },
+        }
+      );
+    } catch (err) {
+      console.error(err);
+    }
+
+    setNotifications((prev) => prev.filter((n) => n._id !== notif._id));
     toast.success("Connection accepted!");
   };
 
   // 🔹 Step 4: Handle Reject
-  const handleReject = (notif) => {
+  const handleReject = async (notif) => {
     socket.emit("reject_connection_request", {
       notifId: notif._id,
       from: notif.from._id,
       to: user._id,
     });
 
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n._id === notif._id ? { ...n, read: true, status: "rejected" } : n
-      )
-    );
+    try {
+      await fetch(
+        `${API_BASE_URL}/user/connections/delete-notification/${notif._id}`,
+        {
+          method: "DELETE",
+          headers: { auth: getToken() },
+        }
+      );
+    } catch (err) {
+      console.error(err);
+    }
+
+    setNotifications((prev) => prev.filter((n) => n._id !== notif._id));
     toast.success("Connection rejected!");
   };
 
-  // 🔹 Step 5: UI
-  const newNotifs = notifications.filter((n) => !n.seenTwice);
+  // 🔹 Step 5: Auto-hide "accepted your connection request" notifications after second view
+  useEffect(() => {
+    notifications.forEach(async (notif) => {
+      if (
+        notif.content.includes("accepted your connection request.") ||
+        notif.content.includes("rejected your connection request.")
+      ) {
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/user/connections/mark-seen-or-delete/${notif._id}`,
+            {
+              method: "PATCH",
+              headers: { auth: getToken() },
+            }
+          );
+          const data = await res.json();
+          // If deleted on backend, remove from frontend
+          if (data.message.includes("deleted")) {
+            setNotifications((prev) => prev.filter((n) => n._id !== notif._id));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
+  }, [notifications]);
 
+  // 🔹 Step 6: UI
   return (
     <div className="bg-gray-100 min-h-screen">
       <div className="bg-white shadow-sm sticky top-0 z-10 py-3 px-6 flex items-center justify-between border-b">
@@ -163,16 +175,16 @@ export default function ConnectionRequestsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto mt-6 px-4 pb-12 space-y-4">
-        {newNotifs.length === 0 ? (
+        {notifications.length === 0 ? (
           <div className="flex flex-col items-center mt-20 text-gray-400">
             <User size={50} className="mb-2 opacity-70" />
-            <p className="text-lg">No new connection requests</p>
+            <p className="text-lg">No connection requests</p>
           </div>
         ) : (
-          newNotifs.map((notif) => (
+          notifications.map((notif) => (
             <div
               key={notif._id}
-              className={`flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-blue-200`}
+              className="flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-blue-200"
             >
               <div className="flex-shrink-0">
                 <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
@@ -181,40 +193,57 @@ export default function ConnectionRequestsPage() {
               </div>
 
               <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-gray-800 text-[15px] leading-snug">
-                    {notif.content}
-                  </p>
-                  <span className="ml-2 text-[11px] font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-                    NEW
-                  </span>
-                </div>
+                <p className="text-gray-800 text-[15px] leading-snug mb-2">
+                  {notif.content}
+                </p>
 
                 <p className="text-xs text-gray-500 mb-3">
                   {new Date(notif.createdAt).toLocaleString()}
                 </p>
 
                 <div className="flex gap-2 flex-wrap">
-                  {notif.content.includes("sent you a connection request") &&
-                    !notif.status && (
-                      <>
-                        <Button
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1"
-                          onClick={() => handleAccept(notif)}
-                        >
-                          <Check size={16} /> Accept
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex items-center gap-1 border-gray-300 text-gray-700 hover:bg-gray-100"
-                          onClick={() => handleReject(notif)}
-                        >
-                          <X size={16} /> Reject
-                        </Button>
-                      </>
-                    )}
+                  {notif.type === "connection_request" &&
+                  !notif.status &&
+                  !notif.content.includes(
+                    "accepted your connection request."
+                  ) &&
+                  !notif.content.includes(
+                    "rejected your connection request."
+                  ) ? (
+                    <>
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1"
+                        onClick={() => handleAccept(notif)}
+                      >
+                        <Check size={16} /> Accept
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1 border-gray-300 text-gray-700 hover:bg-gray-100"
+                        onClick={() => handleReject(notif)}
+                      >
+                        <X size={16} /> Reject
+                      </Button>
+                    </>
+                  ) : (
+                    (notif.status || notif.type === "connection_accepted") && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
+                          notif.status === "accepted" ||
+                          notif.type === "connection_accepted"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {notif.status === "accepted" ||
+                        notif.type === "connection_accepted"
+                          ? "Accepted"
+                          : "Rejected"}
+                      </span>
+                    )
+                  )}
 
                   <Button
                     size="sm"
