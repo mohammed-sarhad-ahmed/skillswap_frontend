@@ -89,7 +89,6 @@ export default function ConnectionRequestsPage() {
 
         setNotifications(updated);
 
-        // 🧠 Immediately mark unseen notifications as read
         const newlySeen = updated.filter((n) => !n.seenTwice).map((n) => n._id);
         if (newlySeen.length > 0) {
           await fetch(`${API_BASE_URL}/notifications/mark-many-read`, {
@@ -101,7 +100,6 @@ export default function ConnectionRequestsPage() {
             body: JSON.stringify({ ids: newlySeen }),
           });
 
-          // ✅ Instantly update local state so “NEW” disappears now
           setNotifications((prev) =>
             prev.map((n) =>
               newlySeen.includes(n._id) ? { ...n, seenTwice: true } : n
@@ -154,6 +152,8 @@ export default function ConnectionRequestsPage() {
   };
 
   // 🔹 Step 5: UI
+  const newNotifs = notifications.filter((n) => !n.seenTwice);
+
   return (
     <div className="bg-gray-100 min-h-screen">
       <div className="bg-white shadow-sm sticky top-0 z-10 py-3 px-6 flex items-center justify-between border-b">
@@ -163,18 +163,16 @@ export default function ConnectionRequestsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto mt-6 px-4 pb-12 space-y-4">
-        {notifications.length === 0 ? (
+        {newNotifs.length === 0 ? (
           <div className="flex flex-col items-center mt-20 text-gray-400">
             <User size={50} className="mb-2 opacity-70" />
-            <p className="text-lg">No connection requests yet</p>
+            <p className="text-lg">No new connection requests</p>
           </div>
         ) : (
-          notifications.map((notif) => (
+          newNotifs.map((notif) => (
             <div
               key={notif._id}
-              className={`flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 ${
-                notif.read ? "opacity-90" : "border border-blue-200"
-              }`}
+              className={`flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-blue-200`}
             >
               <div className="flex-shrink-0">
                 <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
@@ -187,11 +185,9 @@ export default function ConnectionRequestsPage() {
                   <p className="text-gray-800 text-[15px] leading-snug">
                     {notif.content}
                   </p>
-                  {!notif.status && !notif.seenTwice && (
-                    <span className="ml-2 text-[11px] font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-                      NEW
-                    </span>
-                  )}
+                  <span className="ml-2 text-[11px] font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                    NEW
+                  </span>
                 </div>
 
                 <p className="text-xs text-gray-500 mb-3">
@@ -228,12 +224,6 @@ export default function ConnectionRequestsPage() {
                   >
                     <User size={16} /> View Profile
                   </Button>
-
-                  {notif.status === "accepted" && (
-                    <span className="text-xs font-medium text-green-600 bg-green-100 rounded-full px-3 py-1">
-                      ✅ Connected
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
