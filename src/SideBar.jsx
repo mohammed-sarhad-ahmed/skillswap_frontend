@@ -83,11 +83,11 @@ export default function AppSidebar() {
         if (!res.ok) throw new Error("Server error");
       }
       removeToken();
-      location.href = "/login";
+      window.location.href = "/login";
     } catch (err) {
       console.error(err);
       removeToken();
-      location.href = "/login";
+      window.location.href = "/login";
     }
   };
 

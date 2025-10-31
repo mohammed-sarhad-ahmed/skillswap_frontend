@@ -33,7 +33,7 @@ export default function LoginPage() {
       saveToken(data.data.token);
       toast.success("Logged in successfully");
 
-      location.href = "/login";
+      location.href = "/profile";
     } catch (err) {
       toast.error(err.message || "Login failed");
     } finally {

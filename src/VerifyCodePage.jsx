@@ -90,12 +90,12 @@ export default function VerifyCodePage() {
 
       removeToken();
       toast.success("Logged out successfully");
-      navigate("/login");
+      location.href = "/login";
     } catch (err) {
       console.error("Logout failed:", err);
       removeToken();
       toast.error("Logout failed, but session cleared");
-      navigate("/login");
+      location.href = "/login";
     }
   };
 
