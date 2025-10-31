@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
 import { getToken, removeToken } from "./ManageToken";
-import { useNavigate } from "react-router";
 import { Toaster } from "react-hot-toast";
 
 export default function VerifyCodePage() {
@@ -10,7 +9,6 @@ export default function VerifyCodePage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (cooldown > 0) {
