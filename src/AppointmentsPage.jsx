@@ -125,6 +125,7 @@ export default function AppointmentsPage() {
       if (res.ok) setUserId(data.data.user._id);
     } catch (err) {
       toast.error("Failed to fetch user info");
+      console.log(err);
     }
   };
 

@@ -48,7 +48,9 @@ export default function BuyCredit() {
       let data = {};
       try {
         data = await res.json();
-      } catch {}
+      } catch (err) {
+        console.log(err);
+      }
 
       toast.dismiss(loadingToast);
 

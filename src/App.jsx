@@ -18,6 +18,7 @@ import ProfileInfo from "./ProfileInfo";
 import ChatPage from "./ChatPage";
 import ConnectionRequestsPage from "./ConnectionRequestsPage";
 import ConnectionsPage from "./ConnectionPage";
+import SessionTab from "./SessionTab";
 
 export default function App() {
   return (
@@ -34,7 +35,7 @@ export default function App() {
       <Routes>
         <Route element={<PrivateRoute requireVerified={true} />}>
           <Route element={<MainLayout />}>
-            <Route path="/sessions" element={<div>Sessions Page</div>} />
+            <Route path="/sessions" element={<SessionTab />} />
             <Route path="/appointments" element={<AppointmentsPage />} />
             <Route path="/skills" element={<SkillsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
