@@ -230,8 +230,10 @@ export default function ProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to add skill");
 
-      toast.success(data.message);
-      setSkills([...skills, { ...skillPayload, type: newSkillType }]);
+      setSkills([
+        ...skills,
+        { ...skillPayload, type: newSkillType, _id: data.data.skill._id },
+      ]);
 
       // Reset modal fields
       setNewSkillName("");
