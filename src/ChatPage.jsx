@@ -72,6 +72,18 @@ export default function ChatPage() {
       const receiverId = message.receiverId;
       const otherId = senderId === currentUser?._id ? receiverId : senderId;
 
+      // 🧠 Try to fetch the other user's info before updating state
+      let fetchedUser = null;
+      try {
+        const res = await fetch(`${API_BASE_URL}/user/teacher/${otherId}`, {
+          headers: { auth: getToken() },
+        });
+        const data = await res.json();
+        fetchedUser = data?.data?.user || null;
+      } catch (err) {
+        console.error("Error fetching user info:", err);
+      }
+
       setChatUsers((prevUsers) => {
         let users = [...prevUsers];
         const index = users.findIndex((u) => u._id === otherId);
@@ -86,7 +98,7 @@ export default function ChatPage() {
         const updatedUser = {
           ...(index !== -1
             ? users[index]
-            : { _id: otherId, fullName: "New User" }),
+            : fetchedUser || { _id: otherId, fullName: "Unknown User" }),
           lastMessage: message,
           unread,
         };
@@ -94,12 +106,12 @@ export default function ChatPage() {
         if (index !== -1) users.splice(index, 1);
         users.unshift(updatedUser);
 
-        // ⚡ If no selected user yet, set it automatically
         if (!selectedUser) setSelectedUser(updatedUser);
 
         return users;
       });
 
+      // ✅ Mark as read if it’s the open chat
       if (
         selectedUser &&
         [selectedUser._id, currentUser?._id].includes(senderId) &&
