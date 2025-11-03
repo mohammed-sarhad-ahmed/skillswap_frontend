@@ -50,6 +50,7 @@ export default function ConnectionsPage() {
           headers: { auth: getToken() },
         });
         const data = await res.json();
+        console.log(data);
         if (!res.ok)
           throw new Error(data.message || "Failed to fetch connections");
         setConnections(data.data.connections);
@@ -94,14 +95,16 @@ export default function ConnectionsPage() {
     const times = [];
     let [h, m] = start.split(":").map(Number);
     let [endH, endM] = end.split(":").map(Number);
+
     while (h < endH || (h === endH && m < endM)) {
       times.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-      m += 30;
+      m += 1; // ⬅️ make each slot 1 minute apart
       if (m >= 60) {
         h++;
         m -= 60;
       }
     }
+
     return times;
   };
 
@@ -118,13 +121,26 @@ export default function ConnectionsPage() {
   const handleDateSelect = (date) => {
     if (isDateDisabled(date)) return;
     setNewDate(date);
+
     const weekday = getWeekday(date);
     const dayData = selectedUser.availability[weekday];
     if (!dayData || dayData.off) {
       setAvailableTimes([]);
       return;
     }
-    const times = generateTimeSlots(dayData.start, dayData.end);
+
+    // Generate all times first
+    let times = generateTimeSlots(dayData.start, dayData.end);
+
+    // Filter out past times if the selected date is today
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+        Math.floor(now.getMinutes() / 30) * 30
+      ).padStart(2, "0")}`;
+      times = times.filter((t) => t > currentTime);
+    }
+
     setAvailableTimes(times);
   };
 
@@ -165,7 +181,6 @@ export default function ConnectionsPage() {
   return (
     <>
       <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 w-full max-w-5xl mx-auto">
-        {/* Search Bar */}
         <div className="w-full md:flex-1">
           <Input
             placeholder="Search by name or skill..."
@@ -178,7 +193,6 @@ export default function ConnectionsPage() {
           />
         </div>
 
-        {/* Filters */}
         <div className="flex flex-wrap gap-3 mt-3 md:mt-0 w-full md:w-auto">
           <select
             value={category}
@@ -240,28 +254,59 @@ export default function ConnectionsPage() {
                 <CardContent className="p-0 w-full">
                   <CardDescription>
                     <div className="flex flex-col items-center w-full">
-                      {user.skills && user.skills.length > 0 ? (
-                        <div className="flex flex-wrap gap-2 justify-center mt-2">
-                          {user.skills.map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
-                            >
-                              {skill.name} ({skill.level})
-                            </span>
-                          ))}
-                        </div>
+                      {(user.skills && user.skills.length > 0) ||
+                      (user.learningSkills &&
+                        user.learningSkills.length > 0) ? (
+                        <>
+                          {/* Teaching Skills */}
+                          {user.skills && user.skills.length > 0 && (
+                            <>
+                              <p className="font-semibold mt-2 text-blue-600">
+                                Teaching:
+                              </p>
+                              <div className="flex flex-wrap gap-2 justify-center mt-1">
+                                {user.skills.map((skill, idx) => (
+                                  <span
+                                    key={`teach-${idx}`}
+                                    className="bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
+                                  >
+                                    {skill.name} ({skill.level})
+                                  </span>
+                                ))}
+                              </div>
+                            </>
+                          )}
+
+                          {/* Learning Skills */}
+                          {user.learningSkills &&
+                            user.learningSkills.length > 0 && (
+                              <>
+                                <p className="font-semibold mt-3 text-green-600">
+                                  Learning:
+                                </p>
+                                <div className="flex flex-wrap gap-2 justify-center mt-1">
+                                  {user.learningSkills.map((skill, idx) => (
+                                    <span
+                                      key={`learn-${idx}`}
+                                      className="bg-green-500/10 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-300"
+                                    >
+                                      {skill.name} ({skill.level})
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                        </>
                       ) : (
-                        <span className="text-gray-400 text-sm italic mt-2">
-                          No skills specified
-                        </span>
+                        <p className="text-gray-400 italic mt-2">
+                          No skills have been specified
+                        </p>
                       )}
                     </div>
                   </CardDescription>
                 </CardContent>
               </div>
 
-              {/* Buttons */}
               <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center w-full px-4">
                 <Button
                   variant="outline"
@@ -282,7 +327,6 @@ export default function ConnectionsPage() {
           ))}
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-wrap justify-center mt-8 gap-2">
             <Button
@@ -315,7 +359,6 @@ export default function ConnectionsPage() {
         )}
       </div>
 
-      {/* Appointment Modal */}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent className="w-full sm:max-w-md">
           <DialogHeader>

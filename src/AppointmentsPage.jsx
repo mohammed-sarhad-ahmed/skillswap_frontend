@@ -106,7 +106,7 @@ export default function AppointmentsPage() {
           return appt;
         })
       );
-
+      console.log(updatedAppointments);
       setAppointments(updatedAppointments);
     } catch (err) {
       toast.error(err.message);
@@ -167,13 +167,26 @@ export default function AppointmentsPage() {
   const handleDateSelect = (date) => {
     if (isDateDisabled(date)) return;
     setNewDate(date);
+
     const weekday = getWeekday(date);
     const dayData = selectedAppt.teacher.availability[weekday];
     if (!dayData || dayData.off) {
       setAvailableTimes([]);
       return;
     }
-    const times = generateTimeSlots(dayData.start, dayData.end);
+
+    // generate full list first
+    let times = generateTimeSlots(dayData.start, dayData.end);
+
+    // if same-day selection, remove past times
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+        Math.floor(now.getMinutes() / 30) * 30
+      ).padStart(2, "0")}`;
+      times = times.filter((t) => t > currentTime);
+    }
+
     setAvailableTimes(times);
   };
 
@@ -211,7 +224,7 @@ export default function AppointmentsPage() {
 
   const handleRescheduleClick = (appt) => {
     setSelectedAppt(appt);
-    setNewDate(new Date(appt.date));
+    setNewDate(null);
     setNewTime(appt.time);
     setAvailableTimes([]);
     setOpenModal(true);
@@ -336,22 +349,26 @@ export default function AppointmentsPage() {
                       ? appt.student?.learningSkills
                       : appt.teacher?.teachingSkills;
 
-                    if (
-                      !rawSkills ||
-                      (Array.isArray(rawSkills) && rawSkills.length === 0)
-                    )
+                    if (!rawSkills || rawSkills.length === 0)
                       return (
                         <span className="text-gray-400 text-sm italic">
                           Not specified
                         </span>
                       );
 
-                    const skillsArray = Array.isArray(rawSkills)
-                      ? rawSkills
-                      : rawSkills
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean);
+                    // Handle both array of objects and comma-separated string
+                    let skillsArray = [];
+
+                    if (Array.isArray(rawSkills)) {
+                      skillsArray = rawSkills.map((s) =>
+                        typeof s === "object" && s.name ? s.name : String(s)
+                      );
+                    } else if (typeof rawSkills === "string") {
+                      skillsArray = rawSkills
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                    }
 
                     return (
                       <div className="flex flex-wrap gap-2">
