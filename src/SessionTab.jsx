@@ -31,8 +31,6 @@ const RatingModal = ({
   setReview,
   ratingError,
   ratingSubmitted,
-  setRatingSubmitted,
-  setRatingError,
   submitRating,
   skipRating,
   handleRatingContinue,
@@ -181,8 +179,8 @@ export default function SessionTab() {
   const [countdown, setCountdown] = useState("");
   const [otherJoined, setOtherJoined] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
+  const [micOn, setMicOn] = useState(false); // Changed to false by default
+  const [cameraOn, setCameraOn] = useState(false); // Changed to false by default
   const [videoHidden, setVideoHidden] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -379,6 +377,19 @@ export default function SessionTab() {
       });
 
       localStreamRef.current = stream;
+
+      // Turn off video and audio by default
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+
+      if (videoTracks.length > 0) {
+        videoTracks.forEach((track) => (track.enabled = false));
+      }
+
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track) => (track.enabled = false));
+      }
+
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       return stream;
     } catch (error) {
@@ -388,7 +399,21 @@ export default function SessionTab() {
         video: true,
         audio: true,
       });
+
       localStreamRef.current = fallbackStream;
+
+      // Turn off video and audio by default for fallback stream too
+      const videoTracks = fallbackStream.getVideoTracks();
+      const audioTracks = fallbackStream.getAudioTracks();
+
+      if (videoTracks.length > 0) {
+        videoTracks.forEach((track) => (track.enabled = false));
+      }
+
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track) => (track.enabled = false));
+      }
+
       if (localVideoRef.current)
         localVideoRef.current.srcObject = fallbackStream;
       return fallbackStream;
