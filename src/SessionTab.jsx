@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
@@ -15,7 +15,166 @@ import {
   MonitorOff,
   Volume2,
   VolumeX,
+  Star,
 } from "lucide-react";
+
+// Separate Rating Modal Component to prevent re-renders
+const RatingModal = ({
+  showRating,
+  setShowRating,
+  endedSession,
+  rating,
+  setRating,
+  hoverRating,
+  setHoverRating,
+  review,
+  setReview,
+  ratingError,
+  ratingSubmitted,
+  setRatingSubmitted,
+  setRatingError,
+  submitRating,
+  skipRating,
+  handleRatingContinue,
+}) => {
+  const reviewTextareaRef = useRef(null);
+
+  const handleReviewChange = (e) => {
+    setReview(e.target.value);
+  };
+
+  if (!showRating) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        // Only close if clicking the backdrop (not the modal content)
+        if (e.target === e.currentTarget) {
+          setShowRating(false);
+        }
+      }}
+    >
+      <div
+        className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
+      >
+        {!ratingSubmitted ? (
+          <>
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                Rate Your Session
+              </h3>
+              <p className="text-gray-600">
+                How was your session with {endedSession?.teacher?.fullName}?
+              </p>
+            </div>
+
+            <div className="flex justify-center mb-6">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  className="p-2 transition-transform hover:scale-110"
+                >
+                  <Star
+                    size={40}
+                    className={`${
+                      star <= (hoverRating || rating)
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-gray-300"
+                    } transition-colors duration-200`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Review Text Area - FIXED: No re-renders causing focus loss */}
+            <div className="mb-4">
+              <label
+                htmlFor="review"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Optional Review
+              </label>
+              <textarea
+                ref={reviewTextareaRef}
+                id="review"
+                value={review}
+                onChange={handleReviewChange}
+                placeholder="Share your experience with this teacher (what you liked, what could be improved, etc.)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                rows="4"
+                maxLength="500"
+              />
+              <div className="text-right text-sm text-gray-500 mt-1">
+                {review.length}/500 characters
+              </div>
+            </div>
+
+            {/* Error Message Display */}
+            {ratingError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm text-center">
+                  {ratingError}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-center">
+              <Button
+                onClick={skipRating}
+                className="bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-full px-6 py-2"
+              >
+                Skip
+              </Button>
+              <Button
+                onClick={submitRating}
+                disabled={rating === 0}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Submit Rating
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              Thank You!
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Your {rating}-star rating{review && " and review"} has been
+              submitted.
+            </p>
+            <Button
+              onClick={handleRatingContinue}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-2"
+            >
+              Continue
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function SessionTab() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -33,6 +192,13 @@ export default function SessionTab() {
   const [screenAudioOn, setScreenAudioOn] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [endedSession, setEndedSession] = useState(null);
+  const [review, setReview] = useState("");
+  const [ratingError, setRatingError] = useState("");
 
   const localVideoRef = useRef(null);
   const localVideoContainerRef = useRef(null);
@@ -41,8 +207,6 @@ export default function SessionTab() {
   const screenStreamRef = useRef(null);
   const peerRef = useRef(null);
   const callRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const audioMixerRef = useRef(null);
 
   const navigate = useNavigate();
 
@@ -213,21 +377,11 @@ export default function SessionTab() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30 },
         },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-          sampleRate: 48000,
-          googEchoCancellation: true,
-          googAutoGainControl: true,
-          googNoiseSuppression: true,
-          googHighpassFilter: true,
-        },
+        audio: true,
       });
 
       localStreamRef.current = stream;
@@ -235,7 +389,7 @@ export default function SessionTab() {
       return stream;
     } catch (error) {
       console.error("Error starting local stream:", error);
-      // Fallback to basic constraints
+      // Fallback to basic constraints if 1080p fails
       const fallbackStream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -268,55 +422,6 @@ export default function SessionTab() {
     });
   };
 
-  const createMixedAudioStream = (micStream, screenStream) => {
-    try {
-      const audioContext = new AudioContext();
-      const destination = audioContext.createMediaStreamDestination();
-
-      // Create gain nodes for volume control
-      const micGain = audioContext.createGain();
-      const screenGain = audioContext.createGain();
-
-      // Set initial volumes - reduce screen audio to prevent echo
-      micGain.gain.value = 0.8;
-      screenGain.gain.value = 0.2;
-
-      // Connect mic audio
-      if (micStream.getAudioTracks().length > 0) {
-        const micSource = audioContext.createMediaStreamSource(
-          new MediaStream([micStream.getAudioTracks()[0]])
-        );
-        micSource.connect(micGain);
-        micGain.connect(destination);
-      }
-
-      // Connect screen audio with echo prevention
-      if (screenStream.getAudioTracks().length > 0) {
-        const screenSource = audioContext.createMediaStreamSource(
-          new MediaStream([screenStream.getAudioTracks()[0]])
-        );
-
-        // Add a highpass filter to reduce low frequencies that cause echo
-        const highpassFilter = audioContext.createBiquadFilter();
-        highpassFilter.type = "highpass";
-        highpassFilter.frequency.value = 300;
-
-        screenSource.connect(highpassFilter);
-        highpassFilter.connect(screenGain);
-        screenGain.connect(destination);
-      }
-
-      audioContextRef.current = audioContext;
-      audioMixerRef.current = { micGain, screenGain };
-
-      return destination.stream;
-    } catch (error) {
-      console.error("Error creating mixed audio:", error);
-      // Fallback: use mic audio only to prevent echo issues
-      return new MediaStream(micStream.getAudioTracks());
-    }
-  };
-
   const replaceAudioTrack = (newTrack) => {
     if (!callRef.current) return;
 
@@ -335,13 +440,6 @@ export default function SessionTab() {
     // Stop all media tracks
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-      audioMixerRef.current = null;
-    }
 
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
@@ -378,14 +476,17 @@ export default function SessionTab() {
   };
 
   const toggleScreenAudio = () => {
-    if (!audioMixerRef.current || !screenStreamRef.current) return;
+    if (!screenStreamRef.current) return;
 
     const newState = !screenAudioOn;
     setScreenAudioOn(newState);
 
-    // Adjust screen audio volume - keep it low to prevent echo
-    if (audioMixerRef.current.screenGain) {
-      audioMixerRef.current.screenGain.gain.value = newState ? 0.2 : 0;
+    // Toggle screen audio track
+    const audioTracks = screenStreamRef.current.getAudioTracks();
+    if (audioTracks.length > 0) {
+      audioTracks.forEach((track) => {
+        track.enabled = newState;
+      });
     }
   };
 
@@ -394,13 +495,6 @@ export default function SessionTab() {
       // Stop screen share and return to camera
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
-
-      // Close audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-        audioMixerRef.current = null;
-      }
 
       if (localStreamRef.current) {
         const videoTrack = localStreamRef.current.getVideoTracks()[0];
@@ -427,13 +521,10 @@ export default function SessionTab() {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: "always",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            sampleRate: 48000,
-            channelCount: 2,
-          },
+          audio: true,
         });
 
         screenStreamRef.current = displayStream;
@@ -449,20 +540,12 @@ export default function SessionTab() {
           replaceVideoTrack(videoTrack);
         }
 
-        // Handle audio mixing if screen has audio - start with screen audio OFF to prevent echo
-        if (
-          displayStream.getAudioTracks().length > 0 &&
-          localStreamRef.current
-        ) {
-          const mixedAudioStream = createMixedAudioStream(
-            localStreamRef.current,
-            displayStream
-          );
-          const mixedAudioTrack = mixedAudioStream.getAudioTracks()[0];
-
-          if (mixedAudioTrack) {
-            replaceAudioTrack(mixedAudioTrack);
-            setScreenAudioOn(false); // Start with screen audio OFF by default
+        // Handle audio if screen has audio
+        if (displayStream.getAudioTracks().length > 0) {
+          const audioTrack = displayStream.getAudioTracks()[0];
+          if (audioTrack) {
+            replaceAudioTrack(audioTrack);
+            setScreenAudioOn(true); // Start with screen audio on by default
           }
         }
 
@@ -479,13 +562,6 @@ export default function SessionTab() {
             if (micAudioTrack) {
               replaceAudioTrack(micAudioTrack);
             }
-          }
-
-          // Cleanup audio context
-          if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-            audioMixerRef.current = null;
           }
 
           setIsSharingScreen(false);
@@ -620,7 +696,67 @@ export default function SessionTab() {
     }
   };
 
+  const submitRating = async () => {
+    if (rating === 0) return;
+
+    try {
+      setRatingError("");
+
+      const ratingRes = await fetch(`${API_BASE_URL}/ratings/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          auth: getToken(),
+        },
+        body: JSON.stringify({
+          teacherId: endedSession.teacher._id,
+          sessionId: endedSession._id,
+          rating: rating,
+          review: review.trim(),
+        }),
+      });
+
+      const ratingData = await ratingRes.json();
+
+      if (!ratingRes.ok) {
+        // Handle HTTP error (400, 500, etc.)
+        const errorMessage = ratingData.message || "Failed to submit rating";
+        console.error("Failed to submit rating:", errorMessage);
+        setRatingError(errorMessage);
+        return;
+      }
+
+      // Handle success case
+      if (ratingData.status.toLowerCase() === "success") {
+        console.log("Rating and review submitted successfully");
+        setRatingSubmitted(true);
+        setRatingError(""); // Clear any previous errors
+
+        // Close modal and show next session after successful submission
+        setTimeout(() => {
+          setShowRating(false);
+          setRating(0);
+          setRatingSubmitted(false);
+          setReview("");
+          setRatingError("");
+          fetchSessions(); // Fetch next sessions
+        }, 2000); // Show success message for 2 seconds then close
+      } else {
+        // Handle backend success: false case
+        const errorMessage = ratingData.message || "Rating submission failed";
+        console.error("Rating submission failed:", errorMessage);
+        setRatingError(errorMessage);
+      }
+    } catch (err) {
+      console.error("Error submitting rating:", err.message);
+      setRatingError("Network error occurred while submitting rating");
+    }
+  };
+
   const handleSessionEnded = async () => {
+    // Store the current session before cleanup
+    const currentSession = nextSession;
+
     // Cleanup media and connection
     cleanupAfterCall();
 
@@ -632,7 +768,7 @@ export default function SessionTab() {
 
     try {
       // Update session status on backend
-      await fetch(`${API_BASE_URL}/appointments/end/${nextSession._id}`, {
+      await fetch(`${API_BASE_URL}/appointments/end/${currentSession._id}`, {
         method: "PATCH",
         headers: { auth: getToken() },
       });
@@ -640,12 +776,20 @@ export default function SessionTab() {
 
       // Increase teacher credit if current user is student
       await increaseTeacherCredit();
+
+      // Show rating modal if current user is student
+      if (currentUser?._id === currentSession?.student?._id) {
+        console.log("Showing rating modal for student");
+        setEndedSession(currentSession); // Store the ended session
+        setShowRating(true); // Show rating modal
+      } else {
+        console.log("Not showing rating modal - user is teacher");
+        // Fetch the next session only if not showing rating
+        await fetchSessions();
+      }
     } catch (err) {
       console.error("Error ending session on server:", err);
     }
-
-    // Fetch the next session
-    await fetchSessions();
   };
 
   const confirmEndSession = () => {
@@ -654,6 +798,25 @@ export default function SessionTab() {
 
   const cancelEndSession = () => {
     setShowEndConfirm(false);
+  };
+
+  const skipRating = async () => {
+    setShowRating(false);
+    setRating(0);
+    setRatingSubmitted(false);
+    setReview("");
+    setRatingError("");
+    // Fetch next sessions after skipping rating
+    await fetchSessions();
+  };
+
+  const handleRatingContinue = () => {
+    setShowRating(false);
+    setRating(0);
+    setRatingSubmitted(false);
+    setReview("");
+    setRatingError("");
+    fetchSessions(); // Fetch next sessions
   };
 
   // Cleanup on unmount
@@ -693,12 +856,12 @@ export default function SessionTab() {
 
   if (!currentUser)
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-6">
-        <p className="text-gray-600 text-lg mb-3">Loading...</p>
+      <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-purple-600 to-indigo-500 p-6">
+        <p className="text-white text-lg mb-3">Loading...</p>
       </div>
     );
 
-  if (!nextSession)
+  if (!nextSession && !showRating)
     return (
       <div className="flex flex-col items-center justify-center h-screen w-full bg-gradient-to-br from-purple-600 to-indigo-500 text-white p-6">
         <div className="bg-white/20 backdrop-blur-md rounded-3xl shadow-2xl p-10 flex flex-col items-center border border-white/30">
@@ -722,7 +885,63 @@ export default function SessionTab() {
       </div>
     );
 
-  // Show session ended message
+  // Show rating modal if it should be shown - this takes priority over everything
+  if (showRating) {
+    return (
+      <div className="flex flex-col h-screen bg-gradient-to-br from-purple-600 to-indigo-500 overflow-hidden">
+        {/* Background with next session info */}
+        <div className="absolute inset-0 flex items-center justify-center p-6">
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-2xl w-full text-center border border-white/20">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Your Next Session
+            </h2>
+            {nextSession && (
+              <div className="space-y-4">
+                <p className="text-xl text-white/90">
+                  With{" "}
+                  <span className="font-semibold">
+                    {otherParticipant?.fullName}
+                  </span>
+                </p>
+                <p className="text-lg text-white/80">
+                  Date: {new Date(nextSession.date).toLocaleDateString()}
+                </p>
+                <p className="text-lg text-white/80">
+                  Time: {nextSession.time}
+                </p>
+                <div className="bg-white/10 rounded-xl p-4 mt-4">
+                  <p className="text-lg font-medium text-white">Starting in</p>
+                  <p className="text-3xl md:text-4xl font-extrabold text-white tracking-wider mt-2">
+                    {countdown}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <RatingModal
+          showRating={showRating}
+          setShowRating={setShowRating}
+          endedSession={endedSession}
+          rating={rating}
+          setRating={setRating}
+          hoverRating={hoverRating}
+          setHoverRating={setHoverRating}
+          review={review}
+          setReview={setReview}
+          ratingError={ratingError}
+          ratingSubmitted={ratingSubmitted}
+          setRatingSubmitted={setRatingSubmitted}
+          setRatingError={setRatingError}
+          submitRating={submitRating}
+          skipRating={skipRating}
+          handleRatingContinue={handleRatingContinue}
+        />
+      </div>
+    );
+  }
+
+  // Show session ended message (without rating)
   if (sessionEnded && nextSession) {
     return (
       <div className="flex flex-col items-center justify-center text-center h-screen w-full bg-gradient-to-br from-purple-600 to-indigo-500 text-white p-10 animate-fade-in">
@@ -780,12 +999,12 @@ export default function SessionTab() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-purple-600 to-indigo-500 overflow-hidden">
       {/* Confirmation Dialog */}
       {showEndConfirm && <EndSessionConfirmation />}
 
       {!canJoin && (
-        <div className="flex flex-col items-center justify-center text-center h-screen w-full bg-gradient-to-br from-purple-600 to-indigo-500 text-white p-10 animate-fade-in">
+        <div className="flex flex-col items-center justify-center text-center h-screen w-full text-white p-10 animate-fade-in">
           <img
             src={`${API_BASE_URL}/user_avatar/${otherParticipant.avatar}`}
             alt={otherParticipant.fullName}
@@ -816,7 +1035,7 @@ export default function SessionTab() {
       )}
 
       {canJoin && !hasJoined && (
-        <div className="flex flex-col items-center justify-center text-center h-screen w-full bg-gradient-to-br from-purple-600 to-indigo-500 text-white p-10 animate-fade-in">
+        <div className="flex flex-col items-center justify-center text-center h-screen w-full text-white p-10 animate-fade-in">
           <img
             src={`${API_BASE_URL}/user_avatar/${otherParticipant.avatar}`}
             alt={otherParticipant.fullName}

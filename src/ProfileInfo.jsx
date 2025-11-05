@@ -24,7 +24,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const [connectionState, setConnectionState] = useState("connect");
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
-  const [showUnconnectModal, setShowUnconnectModal] = useState(false); // 👈 NEW
+  const [showUnconnectModal, setShowUnconnectModal] = useState(false);
 
   const fetchUser = async () => {
     try {
