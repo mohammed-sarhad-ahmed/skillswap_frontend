@@ -56,16 +56,16 @@ const RatingModal = ({
       }}
     >
       <div
-        className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
+        className="bg-gradient-to-br from-purple-600 to-indigo-500 rounded-2xl p-8 max-w-md w-full shadow-2xl"
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
       >
         {!ratingSubmitted ? (
           <>
             <div className="text-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              <h3 className="text-2xl font-bold text-white mb-2">
                 Rate Your Session
               </h3>
-              <p className="text-gray-600">
+              <p className="text-white/80">
                 How was your session with {endedSession?.teacher?.fullName}?
               </p>
             </div>
@@ -84,18 +84,18 @@ const RatingModal = ({
                     className={`${
                       star <= (hoverRating || rating)
                         ? "fill-yellow-400 text-yellow-400"
-                        : "text-gray-300"
+                        : "text-white/60"
                     } transition-colors duration-200`}
                   />
                 </button>
               ))}
             </div>
 
-            {/* Review Text Area - FIXED: No re-renders causing focus loss */}
+            {/* Review Text Area */}
             <div className="mb-4">
               <label
                 htmlFor="review"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="block text-sm font-medium text-white mb-2"
               >
                 Optional Review
               </label>
@@ -105,19 +105,19 @@ const RatingModal = ({
                 value={review}
                 onChange={handleReviewChange}
                 placeholder="Share your experience with this teacher (what you liked, what could be improved, etc.)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                className="w-full px-3 py-2 border border-white/30 bg-white/10 text-white rounded-lg focus:ring-2 focus:ring-white focus:border-white resize-none placeholder-white/60"
                 rows="4"
                 maxLength="500"
               />
-              <div className="text-right text-sm text-gray-500 mt-1">
+              <div className="text-right text-sm text-white/60 mt-1">
                 {review.length}/500 characters
               </div>
             </div>
 
             {/* Error Message Display */}
             {ratingError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 text-sm text-center">
+              <div className="mb-4 p-3 bg-red-400/20 border border-red-300/30 rounded-lg">
+                <p className="text-red-100 text-sm text-center">
                   {ratingError}
                 </p>
               </div>
@@ -126,14 +126,14 @@ const RatingModal = ({
             <div className="flex gap-3 justify-center">
               <Button
                 onClick={skipRating}
-                className="bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-full px-6 py-2"
+                className="bg-white/20 hover:bg-white/30 text-white font-semibold rounded-full px-6 py-2 border border-white/30"
               >
                 Skip
               </Button>
               <Button
                 onClick={submitRating}
                 disabled={rating === 0}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-white hover:bg-white/90 text-purple-600 font-semibold rounded-full px-6 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Submit Rating
               </Button>
@@ -141,9 +141,9 @@ const RatingModal = ({
           </>
         ) : (
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-8 h-8 text-green-600"
+                className="w-8 h-8 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -156,16 +156,14 @@ const RatingModal = ({
                 />
               </svg>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              Thank You!
-            </h3>
-            <p className="text-gray-600 mb-6">
+            <h3 className="text-2xl font-bold text-white mb-2">Thank You!</h3>
+            <p className="text-white/80 mb-6">
               Your {rating}-star rating{review && " and review"} has been
               submitted.
             </p>
             <Button
               onClick={handleRatingContinue}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-2"
+              className="bg-white hover:bg-white/90 text-purple-600 font-semibold rounded-full px-6 py-2"
             >
               Continue
             </Button>
@@ -376,11 +374,7 @@ export default function SessionTab() {
   const startLocalStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
-        },
+        video: true,
         audio: true,
       });
 
@@ -583,7 +577,7 @@ export default function SessionTab() {
     if (!currentUser || !nextSession) return;
 
     const peer = new Peer(buildPeerId(nextSession._id, currentUser._id), {
-      host: "192.168.33.12",
+      host: "localhost",
       port: 9000,
       path: "/peerjs",
       secure: false,
@@ -732,15 +726,8 @@ export default function SessionTab() {
         setRatingSubmitted(true);
         setRatingError(""); // Clear any previous errors
 
-        // Close modal and show next session after successful submission
-        setTimeout(() => {
-          setShowRating(false);
-          setRating(0);
-          setRatingSubmitted(false);
-          setReview("");
-          setRatingError("");
-          fetchSessions(); // Fetch next sessions
-        }, 2000); // Show success message for 2 seconds then close
+        // REMOVED: No auto-dismiss timeout - user must click "Continue"
+        // The modal will stay open until user clicks "Continue"
       } else {
         // Handle backend success: false case
         const errorMessage = ratingData.message || "Rating submission failed";
