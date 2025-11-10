@@ -17,6 +17,7 @@ export default function SkillsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
+  const [ratingFilter, setRatingFilter] = useState("");
   const [users, setUsers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 8;
@@ -59,7 +60,12 @@ export default function SkillsPage() {
       ? allSkills.some((s) => s.level?.toLowerCase() === level.toLowerCase())
       : true;
 
-    return matchesSearch && matchesCategory && matchesLevel;
+    // Average rating filter logic
+    const matchesRating = ratingFilter
+      ? user.averageRating >= parseFloat(ratingFilter)
+      : true;
+
+    return matchesSearch && matchesCategory && matchesLevel && matchesRating;
   });
 
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
@@ -71,6 +77,47 @@ export default function SkillsPage() {
 
   const goToPage = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
+  };
+
+  // Function to render star rating
+  const renderStars = (rating) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <span key={i} className="text-yellow-500">
+          ★
+        </span>
+      );
+    }
+
+    if (hasHalfStar) {
+      stars.push(
+        <span key="half" className="text-yellow-500">
+          ★
+        </span>
+      );
+    }
+
+    const emptyStars = 5 - stars.length;
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <span key={`empty-${i}`} className="text-gray-300">
+          ★
+        </span>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1">
+        {stars}
+        <span className="text-sm text-gray-600 ml-1">
+          ({rating?.toFixed(1) || "0.0"})
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -126,6 +173,24 @@ export default function SkillsPage() {
             <option value="Advanced">Advanced</option>
             <option value="Expert">Expert</option>
           </select>
+
+          {/* Rating Filter */}
+          <select
+            value={ratingFilter}
+            onChange={(e) => {
+              setRatingFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-14 flex-1 md:flex-none rounded-xl border border-gray-300 shadow-sm px-4 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+            <option value="">All Ratings</option>
+            <option value="4.5">4.5+ Stars</option>
+            <option value="4.0">4.0+ Stars</option>
+            <option value="3.5">3.5+ Stars</option>
+            <option value="3.0">3.0+ Stars</option>
+            <option value="2.0">2.0+ Stars</option>
+            <option value="1.0">1.0+ Stars</option>
+          </select>
         </div>
       </div>
 
@@ -136,78 +201,99 @@ export default function SkillsPage() {
             currentUsers.map((user) => {
               const teachingSkills = user.teachingSkills || [];
               const learningSkills = user.learningSkills || [];
-              const allSkills = [...teachingSkills, ...learningSkills];
+              const hasTeachingSkills = teachingSkills.length > 0;
+              const hasLearningSkills = learningSkills.length > 0;
 
               return (
                 <Card
                   key={user._id}
-                  className="flex flex-col items-center text-center p-6 justify-between h-full rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1"
+                  className="flex flex-col items-center text-center p-5 justify-between w-full max-w-sm mx-auto rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1 min-h-[380px]"
                 >
                   <div className="flex flex-col items-center space-y-3 w-full">
                     <img
                       src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
                       alt={user.fullName}
-                      className="w-28 h-28 rounded-full object-cover border-4 border-blue-500/40"
+                      className="w-20 h-20 rounded-full object-cover border-4 border-blue-500/40"
                     />
                     <CardHeader className="w-full text-center p-0">
                       <CardTitle className="text-lg font-semibold capitalize text-gray-800">
                         {user.fullName}
                       </CardTitle>
+                      {/* Average Rating Display */}
+                      <div className="mt-1 flex justify-center">
+                        {renderStars(user.averageRating || 0)}
+                      </div>
                     </CardHeader>
 
-                    <CardContent className="p-0 w-full">
+                    <CardContent className="p-0 w-full flex-1 flex flex-col justify-center">
                       <CardDescription>
-                        <div className="flex flex-col items-center w-full">
-                          {allSkills.length > 0 ? (
-                            <>
-                              {teachingSkills.length > 0 && (
-                                <>
-                                  <p className="font-semibold mt-2 text-blue-600">
-                                    Teaching:
-                                  </p>
-                                  <div className="flex flex-wrap gap-2 justify-center mt-1">
-                                    {teachingSkills.map((skill, idx) => (
-                                      <span
-                                        key={`teach-${idx}`}
-                                        className="bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-300"
-                                      >
-                                        {skill.name} ({skill.level})
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-
-                              {learningSkills.length > 0 && (
-                                <>
-                                  <p className="font-semibold mt-3 text-green-600">
-                                    Learning:
-                                  </p>
-                                  <div className="flex flex-wrap gap-2 justify-center mt-1">
-                                    {learningSkills.map((skill, idx) => (
-                                      <span
-                                        key={`learn-${idx}`}
-                                        className="bg-green-500/10 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-300"
-                                      >
-                                        {skill.name} ({skill.level})
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-gray-400 italic mt-2">
-                              No skills have been specified
+                        <div className="flex flex-col items-center w-full space-y-4">
+                          {/* Teaching Skills Section */}
+                          <div className="w-full">
+                            <p className="font-semibold text-blue-600 text-sm mb-2">
+                              Teaching
                             </p>
-                          )}
+                            {hasTeachingSkills ? (
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {teachingSkills
+                                  .slice(0, 3)
+                                  .map((skill, idx) => (
+                                    <span
+                                      key={`teach-${idx}`}
+                                      className="bg-blue-500/10 text-blue-700 px-2 py-1 rounded-full text-xs font-medium border border-blue-300 break-words max-w-full"
+                                    >
+                                      {skill.name} ({skill.level})
+                                    </span>
+                                  ))}
+                                {teachingSkills.length > 3 && (
+                                  <span className="text-xs text-gray-500">
+                                    +{teachingSkills.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-gray-400 italic text-xs">
+                                Teaching skills does not exist
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Learning Skills Section */}
+                          <div className="w-full">
+                            <p className="font-semibold text-green-600 text-sm mb-2">
+                              Learning
+                            </p>
+                            {hasLearningSkills ? (
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {learningSkills
+                                  .slice(0, 3)
+                                  .map((skill, idx) => (
+                                    <span
+                                      key={`learn-${idx}`}
+                                      className="bg-green-500/10 text-green-700 px-2 py-1 rounded-full text-xs font-medium border border-green-300 break-words max-w-full"
+                                    >
+                                      {skill.name} ({skill.level})
+                                    </span>
+                                  ))}
+                                {learningSkills.length > 3 && (
+                                  <span className="text-xs text-gray-500">
+                                    +{learningSkills.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-gray-400 italic text-xs">
+                                Learning skills does not exist
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </CardDescription>
                     </CardContent>
                   </div>
 
                   <Button
-                    className="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
+                    className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition py-2 text-sm"
                     onClick={() => navigate(`/profile-info/${user._id}`)}
                   >
                     View Profile
