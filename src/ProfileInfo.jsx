@@ -7,6 +7,8 @@ import {
   Mail,
   UserPlus,
   X,
+  Star,
+  Users,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
@@ -25,6 +27,14 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [showUnconnectModal, setShowUnconnectModal] = useState(false);
+  const [ratings, setRatings] = useState([]);
+  const [ratingFilter, setRatingFilter] = useState(0);
+  const [ratingStats, setRatingStats] = useState({
+    averageRating: 0,
+    totalRatings: 0,
+    ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+  });
+  const [loading, setLoading] = useState(true);
 
   const fetchUser = async () => {
     try {
@@ -32,15 +42,58 @@ export default function ProfileInfo({ isSidebarOpen }) {
         headers: { auth: getToken() },
       });
       const data = await res.json();
-      setUser(data.data.user);
+
+      if (data.status.toLowerCase() === "success") {
+        setUser(data.data.user);
+      } else {
+        toast.error("Could not fetch user info");
+      }
     } catch {
       toast.error("Could not fetch user info");
     }
   };
 
-  // Fetch profile user
+  const fetchRatingStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ratings/teacher/${id}/stats`, {
+        headers: { auth: getToken() },
+      });
+      const data = await res.json();
+
+      if (data.status.toLowerCase() === "success") {
+        setRatingStats(data.data);
+      }
+    } catch (error) {
+      console.error("Could not fetch rating stats");
+    }
+  };
+
+  const fetchRatings = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ratings/teacher/${id}`, {
+        headers: { auth: getToken() },
+      });
+      const data = await res.json();
+
+      if (data.status.toLowerCase() === "success") {
+        // Handle both array and object formats
+        const ratingsData = Array.isArray(data.data)
+          ? data.data
+          : data.data.ratings || [];
+        setRatings(ratingsData);
+      }
+    } catch (error) {
+      console.error("Could not fetch ratings");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch profile user, rating stats, and ratings
   useEffect(() => {
     fetchUser();
+    fetchRatingStats();
+    fetchRatings();
   }, [id]);
 
   // Fetch current logged-in user
@@ -55,19 +108,22 @@ export default function ProfileInfo({ isSidebarOpen }) {
           },
         });
         const data = await res.json();
-        const me = data.data.user;
-        setCurrentUser(me);
-        socket.emit("register_user", me._id);
 
-        const targetId = String(id);
+        if (data.status.toLowerCase() === "success") {
+          const me = data.data.user;
+          setCurrentUser(me);
+          socket.emit("register_user", me._id);
 
-        if (me.connections.map(String).includes(targetId))
-          setConnectionState("connected");
-        else if (me.sentRequests.map(String).includes(targetId))
-          setConnectionState("requested");
-        else if (me.receivedRequests.map(String).includes(targetId))
-          setConnectionState("accept");
-        else setConnectionState("connect");
+          const targetId = String(id);
+
+          if (me.connections.map(String).includes(targetId))
+            setConnectionState("connected");
+          else if (me.sentRequests.map(String).includes(targetId))
+            setConnectionState("requested");
+          else if (me.receivedRequests.map(String).includes(targetId))
+            setConnectionState("accept");
+          else setConnectionState("connect");
+        }
       } catch {
         toast.error("Could not fetch current user info");
       }
@@ -149,8 +205,11 @@ export default function ProfileInfo({ isSidebarOpen }) {
         body: JSON.stringify({ reportedUser: user._id, reason: reportReason }),
       });
       const data = await res.json();
-      if (res.ok) toast.success("User reported successfully!");
-      else toast.error(data.message || "Failed to report user");
+      if (res.ok && data.status.toLowerCase() === "success") {
+        toast.success("User reported successfully!");
+      } else {
+        toast.error(data.message || "Failed to report user");
+      }
       setShowReportModal(false);
       setReportReason("");
     } catch {
@@ -158,12 +217,68 @@ export default function ProfileInfo({ isSidebarOpen }) {
     }
   };
 
-  if (!user || !currentUser)
+  // Function to render star rating
+  const renderStars = (rating, size = "text-base") => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <Star key={i} className={`${size} text-yellow-500 fill-yellow-500`} />
+      );
+    }
+
+    if (hasHalfStar) {
+      stars.push(
+        <Star
+          key="half"
+          className={`${size} text-yellow-500 fill-yellow-500`}
+        />
+      );
+    }
+
+    const emptyStars = 5 - stars.length;
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <Star key={`empty-${i}`} className={`${size} text-gray-300`} />
+      );
+    }
+
+    return <div className="flex items-center gap-1">{stars}</div>;
+  };
+
+  // Rating distribution for filter buttons
+  const ratingOptions = [
+    { value: 0, label: "All Ratings", count: ratingStats.totalRatings },
+    { value: 5, label: "5 Stars", count: ratingStats.ratingDistribution[5] },
+    { value: 4, label: "4 Stars", count: ratingStats.ratingDistribution[4] },
+    { value: 3, label: "3 Stars", count: ratingStats.ratingDistribution[3] },
+    { value: 2, label: "2 Stars", count: ratingStats.ratingDistribution[2] },
+    { value: 1, label: "1 Star", count: ratingStats.ratingDistribution[1] },
+  ];
+
+  // Filter ratings based on selected rating
+  const filteredRatings =
+    ratingFilter === 0
+      ? ratings
+      : ratings.filter((rating) => rating.rating === ratingFilter);
+
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen text-lg text-gray-500">
         Loading...
       </div>
     );
+  }
+
+  if (!user || !currentUser) {
+    return (
+      <div className="flex justify-center items-center h-screen text-lg text-gray-500">
+        User not found
+      </div>
+    );
+  }
 
   const sidebarWidth = isSidebarOpen ? 256 : 0;
 
@@ -198,10 +313,33 @@ export default function ProfileInfo({ isSidebarOpen }) {
           <span>{user.email}</span>
         </div>
 
-        {/* Connection count */}
-        <p className="text-sm text-gray-500 mt-1">
-          🔗 {user.connections?.length || 0} Connections
-        </p>
+        {/* Connections and Rating Stats - Now at same level */}
+        <div className="flex flex-wrap justify-center gap-8 mt-4">
+          {/* Connections Count */}
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2 text-gray-700">
+              <Users className="w-5 h-5" />
+              <span className="text-lg font-semibold">
+                {user.connections?.length || 0}
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Connections</p>
+          </div>
+
+          {/* Average Rating */}
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              {renderStars(ratingStats.averageRating, "text-lg")}
+              <span className="text-lg font-bold text-gray-900">
+                {ratingStats.averageRating.toFixed(1)}
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              ({ratingStats.totalRatings}{" "}
+              {ratingStats.totalRatings === 1 ? "rating" : "ratings"})
+            </p>
+          </div>
+        </div>
 
         {/* Action buttons */}
         <div className="flex flex-wrap justify-center gap-3 mt-6">
@@ -351,7 +489,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
       )}
 
-      {/* Info sections remain unchanged */}
+      {/* Info sections */}
       <div className="max-w-5xl mx-auto mt-12 px-4 space-y-10">
         {user.availability && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -375,11 +513,12 @@ export default function ProfileInfo({ isSidebarOpen }) {
           </div>
         )}
 
-        {user.teachingSkills?.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
-              Teaching Skills
-            </h2>
+        {/* Teaching Skills Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+            Teaching Skills
+          </h2>
+          {user.teachingSkills?.length > 0 ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {user.teachingSkills.map((skill, i) => (
                 <div
@@ -406,14 +545,19 @@ export default function ProfileInfo({ isSidebarOpen }) {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-gray-400 italic text-center py-4">
+              Teaching skills does not exist
+            </p>
+          )}
+        </div>
 
-        {user.learningSkills?.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
-              Learning Skills
-            </h2>
+        {/* Learning Skills Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+            Learning Skills
+          </h2>
+          {user.learningSkills?.length > 0 ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {user.learningSkills.map((skill, i) => (
                 <div
@@ -434,8 +578,112 @@ export default function ProfileInfo({ isSidebarOpen }) {
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-gray-400 italic text-center py-4">
+              Learning skills does not exist
+            </p>
+          )}
+        </div>
+
+        {/* Ratings & Reviews Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">
+            Ratings & Reviews
+          </h2>
+
+          {/* Rating Filter Buttons */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {ratingOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setRatingFilter(option.value)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                  ratingFilter === option.value
+                    ? "bg-blue-50 border-blue-300 text-blue-700"
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                {option.value > 0 ? (
+                  <>
+                    {renderStars(option.value, "text-sm")}
+                    <span className="text-xs font-medium">
+                      ({option.count})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm font-medium">
+                    All Ratings ({option.count})
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
-        )}
+
+          {/* Ratings List */}
+          <div className="space-y-4">
+            {filteredRatings.length > 0 ? (
+              filteredRatings.map((rating, index) => (
+                <div
+                  key={rating._id || index}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={`${API_BASE_URL}/user_avatar/${
+                          rating.student?.avatar || "default-avatar.jpg"
+                        }`}
+                        alt={rating.student?.fullName || "Student"}
+                        className="w-10 h-10 rounded-full object-cover border border-gray-300"
+                      />
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {rating.student?.fullName || "Anonymous Student"}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          {renderStars(rating.rating, "text-sm")}
+                          <span className="text-xs text-gray-500">
+                            {new Date(rating.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {rating.review && rating.review.trim() !== "" && (
+                    <p className="text-gray-700 text-sm mt-2 bg-gray-50 p-3 rounded-lg">
+                      {rating.review}
+                    </p>
+                  )}
+
+                  {/* ADDED: Reply Display */}
+                  {rating.reply && (
+                    <div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MessageCircle className="w-4 h-4 text-blue-600" />
+                        <span className="font-medium text-blue-900 text-sm">
+                          Response from {user.fullName}
+                        </span>
+                      </div>
+                      <p className="text-blue-800 text-sm">{rating.reply}</p>
+                      {rating.repliedAt && (
+                        <p className="text-xs text-blue-600 mt-2">
+                          Replied on{" "}
+                          {new Date(rating.repliedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 italic text-center py-8">
+                {ratingFilter === 0
+                  ? "No ratings yet"
+                  : `No ${ratingFilter}-star ratings`}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="h-20" />

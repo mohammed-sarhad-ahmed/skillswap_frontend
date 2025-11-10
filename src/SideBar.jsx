@@ -8,6 +8,8 @@ import {
   MessageCircleCodeIcon,
   Bell,
   Search,
+  StarIcon,
+  BookOpen,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -37,6 +39,8 @@ const navItems = [
   { title: "Buy Credits", to: "/buy-credits", icon: CreditCard },
   { title: "Chats", to: "/Chat", icon: MessageCircleCodeIcon },
   { title: "Connections", to: "/ConnectionPage", icon: User },
+  { title: "Reviews", to: "/reviews", icon: StarIcon },
+  { title: "Courses", to: "/course", icon: BookOpen },
 ];
 
 export default function AppSidebar() {
