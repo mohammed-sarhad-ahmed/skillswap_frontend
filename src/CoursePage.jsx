@@ -42,10 +42,11 @@ import {
   GraduationCap,
   Book,
   UserCheck,
+  Eye,
+  RotateCcw, // ADD THIS FOR UNDO ICON
 } from "lucide-react";
 import { useParams } from "react-router";
 import { getToken, getUserId } from "./ManageToken";
-
 import { API_BASE_URL } from "./Config";
 
 export default function CoursePage() {
@@ -589,7 +590,6 @@ export default function CoursePage() {
           method: "POST",
           headers: {
             auth: getToken(),
-            // Don't set Content-Type for FormData, let browser set it
           },
           body: formData,
         }
@@ -669,24 +669,83 @@ export default function CoursePage() {
     }
   };
 
+  // MARK WEEK AS COMPLETE
   const markWeekComplete = async (weekNumber) => {
     try {
-      const structureType = isCurrentUserUserA ? "userA" : "userB";
+      // Determine which structure type to mark as complete
+      // If current user is UserA, they should mark UserB's structure
+      // If current user is UserB, they should mark UserA's structure
+      const structureType = isCurrentUserUserA ? "userB" : "userA";
+
+      console.log("Marking week complete:", {
+        courseId,
+        weekNumber,
+        structureType,
+        isCurrentUserUserA,
+        markingFor: isCurrentUserUserA ? "UserB (teacher)" : "UserA (student)",
+      });
+
       const res = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/complete`,
         {
           method: "PATCH",
-          headers: { auth: getToken() },
+          headers: {
+            auth: getToken(),
+            "Content-Type": "application/json",
+          },
         }
       );
 
       const data = await res.json();
-      if (!res.ok)
+      if (!res.ok) {
         throw new Error(data.message || "Failed to mark week as complete");
+      }
 
       toast.success(`Week ${weekNumber} marked as complete!`);
       fetchCourseDetails();
     } catch (err) {
+      console.error("Mark week complete error:", err);
+      toast.error(err.message);
+    }
+  };
+
+  // UNDO WEEK COMPLETE - NEW FUNCTION
+  const unmarkWeekComplete = async (weekNumber) => {
+    try {
+      // Determine which structure type to unmark
+      // Same logic as markWeekComplete - UserA unsmarks UserB's structure, etc.
+      const structureType = isCurrentUserUserA ? "userB" : "userA";
+
+      console.log("Unmarking week complete:", {
+        courseId,
+        weekNumber,
+        structureType,
+        isCurrentUserUserA,
+        unmarkingFor: isCurrentUserUserA
+          ? "UserB (teacher)"
+          : "UserA (student)",
+      });
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/incomplete`,
+        {
+          method: "PATCH",
+          headers: {
+            auth: getToken(),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to unmark week as complete");
+      }
+
+      toast.success(`Week ${weekNumber} marked as incomplete!`);
+      fetchCourseDetails();
+    } catch (err) {
+      console.error("Unmark week complete error:", err);
       toast.error(err.message);
     }
   };
@@ -722,14 +781,75 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Enhanced download function with better URL handling
-  const downloadFile = (fileUrl) => {
-    // Since files are in public/, the URL should work directly
+  // FIXED: Enhanced download function that forces immediate download
+  const downloadFile = async (fileUrl, fileName) => {
+    try {
+      const fullUrl = fileUrl.startsWith("http")
+        ? fileUrl
+        : `${API_BASE_URL}${fileUrl}`;
+
+      console.log("Downloading file from:", fullUrl);
+
+      // Fetch the file as a blob
+      const response = await fetch(fullUrl, {
+        headers: {
+          auth: getToken(),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      // Convert response to blob
+      const blob = await response.blob();
+
+      // Create a temporary URL for the blob
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement("a");
+      link.href = blobUrl;
+
+      // Extract filename from URL or use provided filename
+      const filename = fileName || fileUrl.split("/").pop() || "download";
+      link.download = filename;
+
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(blobUrl);
+
+      toast.success("File download started!");
+    } catch (err) {
+      console.error("Download error:", err);
+      toast.error("Failed to download file");
+
+      // Fallback: open in new tab if download fails
+      const fullUrl = fileUrl.startsWith("http")
+        ? fileUrl
+        : `${API_BASE_URL}${fileUrl}`;
+      window.open(fullUrl, "_blank");
+    }
+  };
+
+  // NEW: View file function - opens in new tab for preview
+  const viewFile = (fileUrl) => {
     const fullUrl = fileUrl.startsWith("http")
       ? fileUrl
       : `${API_BASE_URL}${fileUrl}`;
-    console.log("Downloading file from:", fullUrl); // Debug log
-    window.open(fullUrl, "_blank");
+    console.log("Viewing file:", fullUrl);
+    // Open in new tab for viewing/preview
+    window.open(fullUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // NEW: Check if file is viewable in browser (images, PDFs)
+  const isViewableFile = (fileType) => {
+    const viewableTypes = ["pdf", "jpg", "jpeg", "png", "gif", "webp"];
+    return viewableTypes.includes(fileType?.toLowerCase());
   };
 
   if (!course) {
@@ -1197,7 +1317,7 @@ export default function CoursePage() {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Action Buttons - UPDATED WITH UNDO FUNCTIONALITY */}
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {canUploadFiles && !isCoursePending && (
                         <>
@@ -1215,21 +1335,40 @@ export default function CoursePage() {
                           </Button>
                         </>
                       )}
+
+                      {/* Show Complete/Undo Complete buttons based on completion status */}
                       {((isOneWay && isStudent) ||
                         (!isOneWay && activeTab === "myLearning")) &&
-                        !week.completed &&
                         !isCoursePending && (
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              markWeekComplete(week.weekNumber);
-                            }}
-                            className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
-                            size="sm"
-                          >
-                            <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">Complete</span>
-                          </Button>
+                          <>
+                            {!week.completed ? (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markWeekComplete(week.weekNumber);
+                                }}
+                                className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                size="sm"
+                              >
+                                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="hidden sm:inline">
+                                  Complete
+                                </span>
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  unmarkWeekComplete(week.weekNumber);
+                                }}
+                                className="flex items-center gap-1 sm:gap-2 bg-gray-600 hover:bg-gray-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                size="sm"
+                              >
+                                <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="hidden sm:inline">Undo</span>
+                              </Button>
+                            )}
+                          </>
                         )}
                     </div>
                   </div>
@@ -1293,17 +1432,37 @@ export default function CoursePage() {
                                 <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
                                   <div className="flex items-center gap-1 sm:gap-2">
                                     {item.type === "document" && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 sm:h-8 text-xs"
-                                        onClick={() =>
-                                          downloadFile(item.fileUrl)
-                                        }
-                                      >
-                                        <Download className="w-3 h-3 mr-1" />
-                                        Download
-                                      </Button>
+                                      <>
+                                        {/* View Button - only for viewable files */}
+                                        {isViewableFile(item.fileType) && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 sm:h-8 text-xs"
+                                            onClick={() =>
+                                              viewFile(item.fileUrl)
+                                            }
+                                          >
+                                            <Eye className="w-3 h-3 mr-1" />
+                                            View
+                                          </Button>
+                                        )}
+                                        {/* Download Button - for all files */}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 sm:h-8 text-xs"
+                                          onClick={() =>
+                                            downloadFile(
+                                              item.fileUrl,
+                                              item.title
+                                            )
+                                          }
+                                        >
+                                          <Download className="w-3 h-3 mr-1" />
+                                          Download
+                                        </Button>
+                                      </>
                                     )}
                                     {item.type === "appointment" && (
                                       <Button

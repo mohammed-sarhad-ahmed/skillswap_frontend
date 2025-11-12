@@ -3,8 +3,9 @@ import toast, { Toaster } from "react-hot-toast";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { API_BASE_URL } from "./Config";
-import { getToken, getUserId } from "./ManageToken"; // Add getUserId function
+import { getToken, getUserId } from "./ManageToken";
 import { useNavigate } from "react-router";
 import {
   BookOpen,
@@ -29,7 +30,32 @@ import {
   PlayCircle,
   PauseCircle,
   Filter,
+  TrendingUp,
+  Award,
+  Clock4,
+  Bookmark,
+  PieChart,
+  Activity,
+  Target as TargetIcon,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+
+// Import Recharts for charts
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 export default function CourseManagementPage() {
   const [search, setSearch] = useState("");
@@ -41,11 +67,12 @@ export default function CourseManagementPage() {
     key: "createdAt",
     direction: "desc",
   });
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const navigate = useNavigate();
 
   // Get current user ID on component mount
   useEffect(() => {
-    const userId = getUserId(); // You need to implement this function
+    const userId = getUserId();
     setCurrentUserId(userId);
   }, []);
 
@@ -113,6 +140,135 @@ export default function CourseManagementPage() {
 
     return matchesSearch && matchesStatus;
   });
+
+  // Analytics Data Calculations
+  const getAnalyticsData = () => {
+    const totalCourses = courses.length;
+    const activeCourses = courses.filter((c) => c.status === "active").length;
+    const completedCourses = courses.filter(
+      (c) => c.status === "completed"
+    ).length;
+    const pendingCourses = courses.filter((c) => c.status === "pending").length;
+    const otherCourses = courses.filter(
+      (c) => !["active", "completed", "pending"].includes(c.status)
+    ).length;
+
+    // Status distribution for pie chart
+    const statusData = [
+      { name: "Active", value: activeCourses, color: "#10b981" },
+      { name: "Completed", value: completedCourses, color: "#3b82f6" },
+      { name: "Pending", value: pendingCourses, color: "#f59e0b" },
+      { name: "Other", value: otherCourses, color: "#6b7280" },
+    ];
+
+    // Monthly course creation data
+    const monthlyData = courses.reduce((acc, course) => {
+      const date = new Date(course.createdAt);
+      const monthYear = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
+
+      if (!acc[monthYear]) {
+        acc[monthYear] = 0;
+      }
+      acc[monthYear]++;
+      return acc;
+    }, {});
+
+    const monthlyChartData = Object.entries(monthlyData)
+      .map(([month, count]) => ({
+        month: new Date(month).toLocaleDateString("en-US", {
+          month: "short",
+          year: "numeric",
+        }),
+        courses: count,
+      }))
+      .slice(-6); // Last 6 months
+
+    // Exchange type distribution
+    const exchangeTypeData = [
+      {
+        name: "Mutual Exchange",
+        value: courses.filter((c) => !c.justWantToLearn).length,
+        color: "#8b5cf6",
+      },
+      {
+        name: "One-Way Learning",
+        value: courses.filter((c) => c.justWantToLearn).length,
+        color: "#06b6d4",
+      },
+    ];
+
+    // Duration statistics
+    const averageDuration =
+      courses.length > 0
+        ? Math.round(
+            courses.reduce((sum, c) => sum + (c.duration || 0), 0) /
+              courses.length
+          )
+        : 0;
+
+    return {
+      totalCourses,
+      activeCourses,
+      completedCourses,
+      pendingCourses,
+      statusData,
+      monthlyChartData,
+      exchangeTypeData,
+      averageDuration,
+      completionRate:
+        totalCourses > 0
+          ? Math.round((completedCourses / totalCourses) * 100)
+          : 0,
+    };
+  };
+
+  const analytics = getAnalyticsData();
+
+  // Custom label renderer for pie charts with better text visibility
+  const renderCustomizedLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    percent,
+    name,
+    value,
+  }) => {
+    // Don't show labels for very small segments to avoid clutter
+    if (percent < 0.03) return null;
+
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.7;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor={x > cx ? "start" : "end"}
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight="bold"
+        stroke="rgba(0,0,0,0.5)"
+        strokeWidth={2}
+        strokeLinejoin="round"
+        paintOrder="stroke"
+      >
+        {`${name}: ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
+  // Alternative label for smaller screens - simpler version
+  const renderSimpleLabel = ({ percent, name }) => {
+    if (percent < 0.03) return null;
+    return `${name}: ${(percent * 100).toFixed(0)}%`;
+  };
 
   // Get status badge
   const getStatusBadge = (status) => {
@@ -220,6 +376,267 @@ export default function CourseManagementPage() {
           .toUpperCase()
       : "?";
   };
+
+  // Analytics Cards Component
+  const AnalyticsCards = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm font-medium">Total Courses</p>
+              <p className="text-3xl font-bold mt-2">
+                {analytics.totalCourses}
+              </p>
+            </div>
+            <BookOpen className="w-8 h-8 text-blue-200" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-emerald-100 text-sm font-medium">
+                Active Courses
+              </p>
+              <p className="text-3xl font-bold mt-2">
+                {analytics.activeCourses}
+              </p>
+            </div>
+            <Activity className="w-8 h-8 text-emerald-200" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm font-medium">
+                Completion Rate
+              </p>
+              <p className="text-3xl font-bold mt-2">
+                {analytics.completionRate}%
+              </p>
+            </div>
+            <Award className="w-8 h-8 text-purple-200" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-cyan-500 to-cyan-600 text-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-cyan-100 text-sm font-medium">Avg Duration</p>
+              <p className="text-3xl font-bold mt-2">
+                {analytics.averageDuration}w
+              </p>
+            </div>
+            <Clock4 className="w-8 h-8 text-cyan-200" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Charts Component - UPDATED with visible text and percentages
+  const AnalyticsCharts = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Status Distribution Pie Chart - UPDATED */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <PieChart className="w-5 h-5 text-blue-600" />
+            Course Status Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 sm:h-64 md:h-80">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+              <RechartsPieChart>
+                <Pie
+                  data={analytics.statusData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={renderCustomizedLabel}
+                  outerRadius={100}
+                  innerRadius={30}
+                  fill="#8884d8"
+                  dataKey="value"
+                  paddingAngle={1}
+                >
+                  {analytics.statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => [value, name]}
+                  wrapperStyle={{ outline: "none" }}
+                  contentStyle={{ borderRadius: "8px" }}
+                  labelFormatter={(name) => `Status: ${name}`}
+                />
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
+                  wrapperStyle={{
+                    paddingTop: "10px",
+                    fontSize: "12px",
+                  }}
+                />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Additional summary below chart */}
+          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            {analytics.statusData.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-2 bg-gray-50 rounded"
+              >
+                <div className="flex items-center">
+                  <div
+                    className="w-3 h-3 rounded-full mr-2"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="font-medium">{item.name}:</span>
+                </div>
+                <span className="font-bold">
+                  {item.value} (
+                  {((item.value / analytics.totalCourses) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Monthly Course Creation - UPDATED */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <TrendingUp className="w-5 h-5 text-green-600" />
+            Courses Created (Last 6 Months)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 sm:h-64 md:h-80">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+              <BarChart
+                data={analytics.monthlyChartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="month"
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  interval={0}
+                  fontSize={12}
+                  tick={{ fill: "#374151" }}
+                />
+                <YAxis fontSize={12} tick={{ fill: "#374151" }} />
+                <Tooltip
+                  wrapperStyle={{ outline: "none" }}
+                  contentStyle={{ borderRadius: "8px" }}
+                  formatter={(value) => [`${value} courses`, "Count"]}
+                  labelFormatter={(label) => `Month: ${label}`}
+                />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Bar
+                  dataKey="courses"
+                  fill="#3b82f6"
+                  name="Courses Created"
+                  radius={[4, 4, 0, 0]}
+                  label={{
+                    position: "top",
+                    fill: "#1f2937",
+                    fontSize: 12,
+                    fontWeight: "bold",
+                  }}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Exchange Type Distribution - UPDATED */}
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <TargetIcon className="w-5 h-5 text-purple-600" />
+            Exchange Type Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 sm:h-64 md:h-80">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+              <RechartsPieChart>
+                <Pie
+                  data={analytics.exchangeTypeData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={renderCustomizedLabel}
+                  outerRadius={100}
+                  innerRadius={40}
+                  fill="#8884d8"
+                  dataKey="value"
+                  paddingAngle={2}
+                >
+                  {analytics.exchangeTypeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => [value, name]}
+                  wrapperStyle={{ outline: "none" }}
+                  contentStyle={{ borderRadius: "8px" }}
+                  labelFormatter={(name) => `Type: ${name}`}
+                />
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
+                  wrapperStyle={{
+                    paddingTop: "10px",
+                    fontSize: "12px",
+                  }}
+                />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Additional summary below chart */}
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {analytics.exchangeTypeData.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center">
+                  <div
+                    className="w-4 h-4 rounded-full mr-3"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="font-semibold text-sm">{item.name}:</span>
+                </div>
+                <span className="font-bold text-lg">
+                  {item.value} (
+                  {((item.value / analytics.totalCourses) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
   // Responsive Table Row Component
   const TableRow = ({ course }) => {
@@ -456,19 +873,41 @@ export default function CourseManagementPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <Toaster position="top-right" />
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Course Management
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Manage your learning exchanges and collaborations
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  Course Management
+                </h1>
+                <p className="mt-2 text-gray-600">
+                  Manage your learning exchanges and collaborations
+                </p>
+              </div>
+              <Button
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                variant={showAnalytics ? "default" : "outline"}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                {showAnalytics ? "Hide Analytics" : "Show Analytics"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Analytics Section */}
+      {showAnalytics && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <AnalyticsCards />
+          <AnalyticsCharts />
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
