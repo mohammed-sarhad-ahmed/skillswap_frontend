@@ -11,11 +11,12 @@ export const removeToken = () => {
 
 // ManageToken.js
 export const getUserId = () => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("authToken");
   if (!token) return null;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1])); // decode JWT
-    return payload.userId;
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    console.log(payload);
+    return payload.id;
   } catch {
     return null;
   }

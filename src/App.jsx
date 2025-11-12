@@ -21,6 +21,7 @@ import ConnectionsPage from "./ConnectionPage";
 import SessionTab from "./SessionTab";
 import ReviewsManagement from "./Reviews";
 import CoursePage from "./CoursePage";
+import CourseManagementPage from "./Courses";
 
 export default function App() {
   return (
@@ -46,7 +47,8 @@ export default function App() {
             <Route path="/chat/:userId" element={<ChatPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/reviews" element={<ReviewsManagement />} />
-            <Route path="/course" element={<CoursePage />} />
+            <Route path="/courses" element={<CourseManagementPage />} />
+            <Route path="/courses/:courseId" element={<CoursePage />} />
             <Route
               path="/ConnectionRequests"
               element={<ConnectionRequestsPage />}

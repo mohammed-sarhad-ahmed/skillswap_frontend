@@ -454,11 +454,9 @@ export default function ConnectionsPage() {
 
   return (
     <>
-      <Toaster position="top-right" />
-
       {/* Header Section */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 px-4">
-        <div className="max-w-5xl mx-auto text-center">
+        <div className="max-w-7xl mx-auto text-center">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">
             Manage Courses with Your Connections
           </h1>
@@ -470,7 +468,7 @@ export default function ConnectionsPage() {
       </div>
 
       {/* Search and Filters */}
-      <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 w-full max-w-5xl mx-auto mt-6">
+      <div className="px-4 sm:px-6 md:px-3 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 w-full max-w-7xl mx-auto mt-6">
         <div className="w-full md:flex-1">
           <Input
             placeholder="Search connections by name or skill..."
@@ -530,7 +528,7 @@ export default function ConnectionsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xlw-full">
               {currentConnections.map((user) => {
                 const teachingSkills = user.teachingSkills || [];
                 const learningSkills = user.learningSkills || [];
@@ -540,23 +538,26 @@ export default function ConnectionsPage() {
                 return (
                   <Card
                     key={user._id}
-                    className="flex flex-col items-center text-center p-5 justify-between w-full max-w-sm mx-auto rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-transform transform hover:-translate-y-1 min-h-[420px] relative"
+                    className="flex flex-col w-full min-w-[320px] rounded-2xl border border-gray-200 bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 min-h-[460px] relative overflow-hidden"
                   >
                     {/* Course Status Badge - Top Right */}
                     {user.courseStatus !== "none" && (
-                      <div className="absolute top-4 right-4">
+                      <div className="absolute top-4 right-4 z-10">
                         {getCourseStatusBadge(user)}
                       </div>
                     )}
 
-                    <div className="flex flex-col items-center space-y-4 w-full">
+                    {/* Background Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50/20 to-purple-50/20"></div>
+
+                    <div className="relative flex flex-col items-center space-y-4 w-full p-6 flex-1">
                       <img
                         src={`${API_BASE_URL}/user_avatar/${user.avatar}`}
                         alt={user.fullName}
-                        className="w-24 h-24 rounded-full object-cover border-4 border-blue-500/40"
+                        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
                       />
                       <CardHeader className="w-full text-center p-0">
-                        <CardTitle className="text-lg font-semibold capitalize text-gray-800">
+                        <CardTitle className="text-xl font-bold capitalize text-gray-900">
                           {user.fullName}
                         </CardTitle>
                       </CardHeader>
@@ -566,30 +567,30 @@ export default function ConnectionsPage() {
                           <div className="flex flex-col items-center w-full space-y-4">
                             {/* Teaching Skills */}
                             <div className="w-full">
-                              <div className="flex items-center gap-2 text-blue-600 font-semibold w-full justify-center mb-2">
-                                <BookOpen className="w-4 h-4" />
-                                <span className="text-sm">Teaching</span>
+                              <div className="flex items-center gap-2 text-blue-700 font-semibold w-full justify-center mb-3">
+                                <BookOpen className="w-5 h-5" />
+                                <span className="text-base">Teaching</span>
                               </div>
                               {hasTeachingSkills ? (
-                                <div className="flex flex-wrap gap-1 justify-center">
+                                <div className="flex flex-wrap gap-2 justify-center">
                                   {teachingSkills
                                     .slice(0, 3)
                                     .map((skill, idx) => (
                                       <span
                                         key={`teach-${idx}`}
-                                        className="bg-blue-500/10 text-blue-700 px-2.5 py-1.5 rounded-full text-xs font-medium border border-blue-300 break-words max-w-full"
+                                        className="bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full text-sm font-medium border border-blue-200 break-words max-w-full shadow-sm"
                                       >
                                         {skill.name} ({skill.level})
                                       </span>
                                     ))}
                                   {teachingSkills.length > 3 && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
                                       +{teachingSkills.length - 3} more
                                     </span>
                                   )}
                                 </div>
                               ) : (
-                                <p className="text-gray-400 italic text-xs">
+                                <p className="text-gray-500 italic text-sm bg-gray-100 px-4 py-2 rounded-lg border border-gray-200 text-center">
                                   No teaching skills listed
                                 </p>
                               )}
@@ -597,30 +598,30 @@ export default function ConnectionsPage() {
 
                             {/* Learning Skills */}
                             <div className="w-full">
-                              <div className="flex items-center gap-2 text-green-600 font-semibold w-full justify-center mb-2">
-                                <Target className="w-4 h-4" />
-                                <span className="text-sm">Learning</span>
+                              <div className="flex items-center gap-2 text-green-700 font-semibold w-full justify-center mb-3">
+                                <Target className="w-5 h-5" />
+                                <span className="text-base">Learning</span>
                               </div>
                               {hasLearningSkills ? (
-                                <div className="flex flex-wrap gap-1 justify-center">
+                                <div className="flex flex-wrap gap-2 justify-center">
                                   {learningSkills
                                     .slice(0, 3)
                                     .map((skill, idx) => (
                                       <span
                                         key={`learn-${idx}`}
-                                        className="bg-green-500/10 text-green-700 px-2.5 py-1.5 rounded-full text-xs font-medium border border-green-300 break-words max-w-full"
+                                        className="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium border border-green-200 break-words max-w-full shadow-sm"
                                       >
                                         {skill.name} ({skill.level})
                                       </span>
                                     ))}
                                   {learningSkills.length > 3 && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
                                       +{learningSkills.length - 3} more
                                     </span>
                                   )}
                                 </div>
                               ) : (
-                                <p className="text-gray-400 italic text-xs">
+                                <p className="text-gray-500 italic text-sm bg-gray-100 px-4 py-2 rounded-lg border border-gray-200 text-center">
                                   No learning goals set
                                 </p>
                               )}
@@ -630,11 +631,11 @@ export default function ConnectionsPage() {
                       </CardContent>
                     </div>
 
-                    <div className="mt-5 flex flex-col gap-3 justify-center w-full px-2">
-                      <div className="flex gap-2">
+                    <div className="relative p-6 pt-0 flex flex-col gap-3 justify-center w-full">
+                      <div className="flex gap-3">
                         <Button
                           variant="outline"
-                          className="flex-1 px-3 py-2.5 border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                          className="flex-1 px-4 py-2.5 border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md rounded-lg"
                           onClick={() => navigate(`/profile-info/${user._id}`)}
                         >
                           Visit Profile

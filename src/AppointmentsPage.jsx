@@ -723,7 +723,6 @@ export default function AppointmentsPage() {
 
   return (
     <>
-      <Toaster position="top-right" />
       <div className="p-4 change-appt-px md:p-6">
         <h1 className="text-2xl font-semibold mb-6">My Appointments</h1>
 

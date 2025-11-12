@@ -40,7 +40,7 @@ const navItems = [
   { title: "Chats", to: "/Chat", icon: MessageCircleCodeIcon },
   { title: "Connections", to: "/ConnectionPage", icon: User },
   { title: "Reviews", to: "/reviews", icon: StarIcon },
-  { title: "Courses", to: "/course", icon: BookOpen },
+  { title: "Courses", to: "/courses", icon: BookOpen },
 ];
 
 export default function AppSidebar() {

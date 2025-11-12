@@ -20,11 +20,12 @@ import {
   SelectItem,
   SelectValue,
 } from "./components/ui/select";
+import { Calendar } from "./components/ui/calendar";
 import {
   ChevronDown,
   ChevronRight,
   Upload,
-  Calendar,
+  Calendar as CalendarIcon,
   FileText,
   Image,
   Users,
@@ -32,99 +33,29 @@ import {
   Plus,
   Trash2,
   Download,
-  MessageCircle,
-  Menu,
+  Edit3,
+  BookOpen,
+  User,
+  Users as UsersIcon,
+  Clock,
+  Ban,
+  GraduationCap,
+  Book,
+  UserCheck,
 } from "lucide-react";
+import { useParams } from "react-router";
+import { getToken, getUserId } from "./ManageToken";
 
-// Fake data for the course
-const generateFakeCourseData = () => {
-  return {
-    _id: "course_123",
-    title: "Python Programming Fundamentals",
-    description:
-      "Learn the basics of Python programming from scratch with hands-on projects and real-world examples",
-    duration: 8,
-    status: "active",
-    progress: 45,
-    startDate: "2024-01-15",
-    endDate: "2024-03-15",
-    users: {
-      userA: {
-        _id: "user_1",
-        fullName: "John Doe",
-        avatar: "avatar1.jpg",
-        teachingSkill: "Web Development",
-      },
-      userB: {
-        _id: "user_2",
-        fullName: "Sarah Wilson",
-        avatar: "avatar2.jpg",
-        teachingSkill: "Data Science",
-      },
-    },
-    weeks: [
-      {
-        weekNumber: 1,
-        title: "Introduction to Python",
-        description:
-          "Get started with Python basics, setup development environment, and write your first program",
-        completed: true,
-        content: [
-          {
-            id: "content_1",
-            type: "document",
-            title: "Python Basics PDF Guide",
-            fileType: "pdf",
-            uploadDate: "2024-01-15",
-            uploadedBy: "user_1",
-            size: "2.4 MB",
-          },
-          {
-            id: "content_2",
-            type: "appointment",
-            title: "Course Kickoff Meeting",
-            date: "2024-01-16",
-            time: "14:00",
-            duration: 60,
-            participants: ["user_1", "user_2"],
-            description: "Let's discuss course goals and expectations",
-          },
-        ],
-      },
-      {
-        weekNumber: 2,
-        title: "Data Types and Variables",
-        description:
-          "Master Python data types, variables, and basic operations",
-        completed: false,
-        content: [
-          {
-            id: "content_3",
-            type: "document",
-            title: "Data Types Cheatsheet",
-            fileType: "pdf",
-            uploadDate: "2024-01-22",
-            uploadedBy: "user_2",
-            size: "1.8 MB",
-          },
-        ],
-      },
-      {
-        weekNumber: 3,
-        title: "Control Structures",
-        description: "Learn if statements, loops, and program flow control",
-        completed: false,
-        content: [],
-      },
-    ],
-  };
-};
+import { API_BASE_URL } from "./Config";
 
 export default function CoursePage() {
+  const { courseId } = useParams();
   const [course, setCourse] = useState(null);
-  const [expandedWeeks, setExpandedWeeks] = useState(new Set([1]));
+  const [activeTab, setActiveTab] = useState("myLearning");
+  const [expandedWeeks, setExpandedWeeks] = useState(new Set());
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
+  const [weekDialogOpen, setWeekDialogOpen] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [uploadForm, setUploadForm] = useState({
     title: "",
@@ -132,22 +63,468 @@ export default function CoursePage() {
     file: null,
     week: 1,
   });
+  const [weekForm, setWeekForm] = useState({
+    title: "",
+    description: "",
+    weekNumber: 1,
+  });
+  const [isEditingWeek, setIsEditingWeek] = useState(false);
+
+  // Appointment booking state
+  const [openAppointmentModal, setOpenAppointmentModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [newDate, setNewDate] = useState(null);
+  const [availableTimes, setAvailableTimes] = useState([]);
+  const [newTime, setNewTime] = useState("");
   const [appointmentForm, setAppointmentForm] = useState({
     title: "",
     description: "",
-    date: "",
-    time: "14:00",
-    duration: 60,
-    week: 1,
   });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Load course data
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setCourse(generateFakeCourseData());
-    }, 500);
-  }, []);
+    if (courseId) {
+      fetchCourseDetails();
+    } else {
+      toast.error("Course ID not found");
+    }
+  }, [courseId]);
+
+  const fetchCourseDetails = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
+        headers: { auth: getToken() },
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message || "Failed to fetch course");
+
+      setCourse(data.data.course);
+      setExpandedWeeks(new Set([1]));
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const isCurrentUserUserA = course?.userA._id === getUserId();
+
+  // Get the other user in the course
+  const getOtherUser = () => {
+    if (!course) return null;
+    return isCurrentUserUserA ? course.userB : course.userA;
+  };
+
+  // FIXED: Check if current user is the teacher
+  const isCurrentUserTeacher = () => {
+    if (!course) return false;
+
+    if (course.exchangeType === "mutual") {
+      // In mutual exchange, both are teachers for their respective parts
+      return activeTab === "myTeaching";
+    } else {
+      // In one-way exchange, teacher is the one who did NOT check "just want to learn"
+      return course.proposedBy._id !== getUserId();
+    }
+  };
+
+  // FIXED: Check if current user is the student
+  const isCurrentUserStudent = () => {
+    if (!course) return false;
+
+    if (course.exchangeType === "mutual") {
+      // In mutual exchange, both are students for their respective parts
+      return activeTab === "myLearning";
+    } else {
+      // In one-way exchange, student is the one who checked "just want to learn"
+      return course.proposedBy._id === getUserId();
+    }
+  };
+
+  // FIXED: Get teacher user - SIMPLIFIED
+  const getTeacherUser = () => {
+    if (!course) return null;
+
+    if (course.exchangeType === "mutual") {
+      // In mutual exchange, teacher depends on current context
+      if (activeTab === "myLearning") {
+        // When learning, the other user is the teacher
+        return isCurrentUserUserA ? course.userB : course.userA;
+      } else {
+        // When teaching, current user is the teacher
+        return isCurrentUserUserA ? course.userA : course.userB;
+      }
+    } else {
+      // In one-way exchange, teacher is the one who did NOT propose
+      return course.proposedBy._id === course.userA._id
+        ? course.userB
+        : course.userA;
+    }
+  };
+
+  // FIXED: Get student user - SIMPLIFIED
+  const getStudentUser = () => {
+    if (!course) return null;
+
+    if (course.exchangeType === "mutual") {
+      // In mutual exchange, student depends on current context
+      if (activeTab === "myLearning") {
+        // When learning, current user is the student
+        return isCurrentUserUserA ? course.userA : course.userB;
+      } else {
+        // When teaching, the other user is the student
+        return isCurrentUserUserA ? course.userB : course.userA;
+      }
+    } else {
+      // In one-way exchange, student is the one who proposed
+      return course.proposedBy._id === course.userA._id
+        ? course.userA
+        : course.userB;
+    }
+  };
+
+  // FIXED: Determine which weekly structure to show based on active tab
+  const getCurrentWeeklyStructure = () => {
+    if (!course) return [];
+
+    let existingStructure = [];
+
+    if (course.exchangeType === "mutual") {
+      // Mutual exchange:
+      // - Learning tab: show the other user's structure (what they're teaching you)
+      // - Teaching tab: show your own structure (what you're teaching them)
+      existingStructure =
+        activeTab === "myLearning"
+          ? isCurrentUserUserA
+            ? course.userBWeeklyStructure
+            : course.userAWeeklyStructure
+          : isCurrentUserUserA
+          ? course.userAWeeklyStructure
+          : course.userBWeeklyStructure;
+    } else {
+      // One-way exchange:
+      // - Teacher sees their own structure (what they're teaching)
+      // - Student sees teacher's structure (what they're learning)
+      if (isCurrentUserTeacher()) {
+        existingStructure = isCurrentUserUserA
+          ? course.userAWeeklyStructure
+          : course.userBWeeklyStructure;
+      } else {
+        existingStructure = isCurrentUserUserA
+          ? course.userBWeeklyStructure
+          : course.userAWeeklyStructure;
+      }
+    }
+
+    // If the structure is empty (can happen in one-way for student), return empty array
+    if (!existingStructure || existingStructure.length === 0) {
+      return [];
+    }
+
+    return existingStructure;
+  };
+
+  // FIXED: Get the teaching skill for current context
+  const getTeachingSkill = () => {
+    if (!course) return "";
+
+    if (course.exchangeType === "mutual") {
+      if (activeTab === "myLearning") {
+        // When learning, show what the other user is teaching you
+        return isCurrentUserUserA
+          ? course.userBTeaching.skill
+          : course.userATeaching.skill;
+      } else {
+        // When teaching, show what you are teaching
+        return isCurrentUserUserA
+          ? course.userATeaching.skill
+          : course.userBTeaching.skill;
+      }
+    } else {
+      // One-way exchange: always show what the teacher is teaching
+      return isCurrentUserTeacher()
+        ? isCurrentUserUserA
+          ? course.userATeaching.skill
+          : course.userBTeaching.skill
+        : isCurrentUserUserA
+        ? course.userBTeaching.skill
+        : course.userATeaching.skill;
+    }
+  };
+
+  // FIXED: Get progress for current context
+  const getCurrentProgress = () => {
+    if (!course) return 0;
+
+    if (course.exchangeType === "mutual") {
+      // In mutual exchange:
+      // - Learning progress: your progress in learning from the other user
+      // - Teaching progress: your progress in teaching the other user
+      return activeTab === "myLearning"
+        ? isCurrentUserUserA
+          ? course.progress.userA
+          : course.progress.userB
+        : isCurrentUserUserA
+        ? course.progress.userB
+        : course.progress.userA;
+    } else {
+      // One-way exchange: student sees their learning progress, teacher sees teaching progress
+      return isCurrentUserStudent()
+        ? isCurrentUserUserA
+          ? course.progress.userA
+          : course.progress.userB
+        : isCurrentUserUserA
+        ? course.progress.userB
+        : course.progress.userA;
+    }
+  };
+
+  // FIXED: Get progress label for current context
+  const getProgressLabel = () => {
+    if (!course) return "";
+
+    if (course.exchangeType === "mutual") {
+      return activeTab === "myLearning"
+        ? "Learning Progress"
+        : "Teaching Progress";
+    } else {
+      return isCurrentUserStudent() ? "Learning Progress" : "Teaching Progress";
+    }
+  };
+
+  // FIXED: Get role description for one-way exchange
+  const getRoleDescription = () => {
+    if (!course || course.exchangeType !== "one-way") return "";
+
+    const teacherUser = getTeacherUser();
+    const studentUser = getStudentUser();
+
+    if (isCurrentUserTeacher()) {
+      return `You are teaching ${getTeachingSkill()} to ${
+        studentUser?.fullName
+      }`;
+    } else {
+      return `You are learning ${getTeachingSkill()} from ${
+        teacherUser?.fullName
+      }`;
+    }
+  };
+
+  // Calculate course end date based on start date and duration
+  const getCourseEndDate = () => {
+    if (!course?.startDate) return null;
+    const startDate = new Date(course.startDate);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + course.duration * 7);
+    return endDate;
+  };
+
+  // Appointment booking functions
+  const getWeekday = (date) =>
+    date.toLocaleDateString("en-US", { weekday: "long" });
+
+  const generateTimeSlots = (start, end) => {
+    const times = [];
+    let [h, m] = start.split(":").map(Number);
+    let [endH, endM] = end.split(":").map(Number);
+
+    while (h < endH || (h === endH && m < endM)) {
+      times.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+      m += 1;
+      if (m >= 60) {
+        h++;
+        m -= 60;
+      }
+    }
+
+    return times;
+  };
+
+  const isDateDisabled = (date) => {
+    if (!selectedUser || !selectedUser.availability) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) return true;
+    const weekday = getWeekday(date);
+    const dayData = selectedUser.availability[weekday];
+    return !dayData || dayData.off;
+  };
+
+  const handleDateSelect = (date) => {
+    if (isDateDisabled(date)) return;
+    setNewDate(date);
+
+    const weekday = getWeekday(date);
+    const dayData = selectedUser.availability[weekday];
+    if (!dayData || dayData.off) {
+      setAvailableTimes([]);
+      return;
+    }
+
+    let times = generateTimeSlots(dayData.start, dayData.end);
+
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+        Math.floor(now.getMinutes() / 30) * 30
+      ).padStart(2, "0")}`;
+      times = times.filter((t) => t > currentTime);
+    }
+
+    setAvailableTimes(times);
+  };
+
+  // FIXED: Open appointment booking modal with correct roles
+  const openAppointmentBookingModal = async () => {
+    const otherUser = getOtherUser();
+    if (!otherUser) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/courses/user/${otherUser._id}/availability`,
+        {
+          headers: { auth: getToken() },
+        }
+      );
+      const data = await res.json();
+
+      if (!res.ok)
+        throw new Error(data.message || "Failed to fetch availability");
+
+      setSelectedUser(data.data.user);
+      setNewDate(null);
+      setNewTime("");
+      setAvailableTimes([]);
+
+      // Set appointment title based on current role
+      const isLearningTab = activeTab === "myLearning";
+      const defaultTitle = isLearningTab
+        ? `Learning Session - Week ${selectedWeek}`
+        : `Teaching Session - Week ${selectedWeek}`;
+
+      setAppointmentForm({
+        title: defaultTitle,
+        description: "",
+      });
+      setOpenAppointmentModal(true);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // FIXED: Handle appointment booking with correct roles
+  const handleBookAppointment = async () => {
+    if (!newDate || !newTime || !appointmentForm.title) {
+      toast.error("Select a date, time, and provide a title");
+      return;
+    }
+
+    try {
+      // Determine who is teacher and who is student based on current tab
+      let teacherId, studentId;
+
+      if (course.exchangeType === "mutual") {
+        // In mutual exchange:
+        // - Learning tab: other user is teacher, current user is student
+        // - Teaching tab: current user is teacher, other user is student
+        if (activeTab === "myLearning") {
+          teacherId = getOtherUser()._id;
+          studentId = getUserId();
+        } else {
+          teacherId = getUserId();
+          studentId = getOtherUser()._id;
+        }
+      } else {
+        // In one-way exchange, roles are fixed
+        teacherId = getTeacherUser()._id;
+        studentId = getStudentUser()._id;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          auth: getToken(),
+        },
+        body: JSON.stringify({
+          teacher: teacherId,
+          student: studentId,
+          date: newDate.toISOString().split("T")[0],
+          time: newTime,
+          title: appointmentForm.title,
+          description: appointmentForm.description,
+          courseId: course._id,
+          week: selectedWeek,
+          // Add role context for the appointment
+          roleContext:
+            course.exchangeType === "mutual"
+              ? activeTab === "myLearning"
+                ? "learning"
+                : "teaching"
+              : isCurrentUserTeacher()
+              ? "teaching"
+              : "learning",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to book appointment");
+
+      await addAppointmentToCourse(data.data.appointment, teacherId, studentId);
+
+      toast.success("Appointment booked successfully!");
+      setOpenAppointmentModal(false);
+      setNewDate(null);
+      setNewTime("");
+      setAppointmentForm({ title: "", description: "" });
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // FIXED: Add appointment to course with correct roles
+  const addAppointmentToCourse = async (appointment, teacherId, studentId) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${selectedWeek}/appointments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+          body: JSON.stringify({
+            title: appointmentForm.title || `Meeting - Week ${selectedWeek}`,
+            description: appointmentForm.description,
+            date: newDate.toISOString().split("T")[0],
+            time: newTime,
+            duration: 60,
+            appointmentId: appointment._id,
+            teacher: teacherId,
+            student: studentId,
+            // Add role context to the appointment content
+            roleContext:
+              course.exchangeType === "mutual"
+                ? activeTab === "myLearning"
+                  ? "learning"
+                  : "teaching"
+                : isCurrentUserTeacher()
+                ? "teaching"
+                : "learning",
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to add appointment to course");
+      }
+
+      fetchCourseDetails();
+    } catch (err) {
+      console.error("Failed to add appointment to course:", err);
+    }
+  };
 
   const toggleWeek = (weekNumber) => {
     const newExpanded = new Set(expandedWeeks);
@@ -159,121 +536,200 @@ export default function CoursePage() {
     setExpandedWeeks(newExpanded);
   };
 
-  const handleUploadSubmit = (e) => {
+  // FIXED: Enhanced file upload function with better error handling
+  const handleUploadSubmit = async (e) => {
     e.preventDefault();
 
-    // Create fake uploaded file
-    const newContent = {
-      id: `content_${Date.now()}`,
-      type: "document",
-      title: uploadForm.title,
-      fileType: "pdf",
-      uploadDate: new Date().toISOString().split("T")[0],
-      uploadedBy: "user_1",
-      size: "1.5 MB",
-    };
+    if (!uploadForm.file) {
+      toast.error("Please select a file");
+      return;
+    }
 
-    const updatedWeeks = course.weeks.map((week) => {
-      if (week.weekNumber === uploadForm.week) {
-        return {
-          ...week,
-          content: [...week.content, newContent],
-        };
+    // Check file size (10MB limit)
+    if (uploadForm.file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+
+    // FIXED: Determine correct structure type based on context
+    let structureType;
+    if (course.exchangeType === "mutual") {
+      structureType =
+        activeTab === "myTeaching"
+          ? isCurrentUserUserA
+            ? "userA"
+            : "userB"
+          : isCurrentUserUserA
+          ? "userB"
+          : "userA";
+    } else {
+      // One-way exchange
+      if (isCurrentUserTeacher()) {
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      } else {
+        structureType = isCurrentUserUserA ? "userB" : "userA";
       }
-      return week;
-    });
+    }
 
-    setCourse({
-      ...course,
-      weeks: updatedWeeks,
-    });
+    const formData = new FormData();
+    formData.append("file", uploadForm.file);
+    formData.append("title", uploadForm.title);
+    formData.append("description", uploadForm.description);
 
-    toast.success("File uploaded successfully!");
-    setUploadDialogOpen(false);
-    setUploadForm({ title: "", description: "", file: null, week: 1 });
+    try {
+      console.log("Uploading file:", {
+        week: uploadForm.week,
+        structureType,
+        fileName: uploadForm.file.name,
+      });
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${uploadForm.week}/${structureType}/upload`,
+        {
+          method: "POST",
+          headers: {
+            auth: getToken(),
+            // Don't set Content-Type for FormData, let browser set it
+          },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Upload failed:", data);
+        throw new Error(data.message || "Failed to upload file");
+      }
+
+      toast.success("File uploaded successfully!");
+      setUploadDialogOpen(false);
+      setUploadForm({ title: "", description: "", file: null, week: 1 });
+      fetchCourseDetails();
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast.error(err.message);
+    }
   };
 
-  const handleAppointmentSubmit = (e) => {
+  const handleWeekSubmit = async (e) => {
     e.preventDefault();
 
-    const newAppointment = {
-      id: `appointment_${Date.now()}`,
-      type: "appointment",
-      title: appointmentForm.title,
-      date: appointmentForm.date,
-      time: appointmentForm.time,
-      duration: appointmentForm.duration,
-      participants: ["user_1", "user_2"],
-      description: appointmentForm.description,
-    };
+    try {
+      const structureType = isCurrentUserUserA ? "userA" : "userB";
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${weekForm.weekNumber}/${structureType}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+          body: JSON.stringify({
+            title: weekForm.title,
+            description: weekForm.description,
+          }),
+        }
+      );
 
-    const updatedWeeks = course.weeks.map((week) => {
-      if (week.weekNumber === appointmentForm.week) {
-        return {
-          ...week,
-          content: [...week.content, newAppointment],
-        };
-      }
-      return week;
-    });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update week");
 
-    setCourse({
-      ...course,
-      weeks: updatedWeeks,
-    });
-
-    toast.success("Appointment scheduled successfully!");
-    setAppointmentDialogOpen(false);
-    setAppointmentForm({
-      title: "",
-      description: "",
-      date: "",
-      time: "14:00",
-      duration: 60,
-      week: 1,
-    });
+      toast.success(
+        isEditingWeek
+          ? "Week updated successfully!"
+          : "Week added successfully!"
+      );
+      setWeekDialogOpen(false);
+      setWeekForm({ title: "", description: "", weekNumber: 1 });
+      setIsEditingWeek(false);
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const getFileIcon = (fileType, type) => {
     if (type === "appointment") {
-      return <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />;
+      return <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />;
     }
 
     switch (fileType) {
       case "pdf":
-        return <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />;
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />;
       case "doc":
       case "docx":
-        return <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />;
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />;
       case "jpg":
       case "png":
       case "gif":
-        return <Image className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />;
+        return <Image className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />;
       default:
-        return <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500" />;
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />;
     }
   };
 
-  const markWeekComplete = (weekNumber) => {
-    const updatedWeeks = course.weeks.map((week) => {
-      if (week.weekNumber === weekNumber) {
-        return { ...week, completed: true };
-      }
-      return week;
+  const markWeekComplete = async (weekNumber) => {
+    try {
+      const structureType = isCurrentUserUserA ? "userA" : "userB";
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/complete`,
+        {
+          method: "PATCH",
+          headers: { auth: getToken() },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to mark week as complete");
+
+      toast.success(`Week ${weekNumber} marked as complete!`);
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const editWeek = (week) => {
+    setWeekForm({
+      title: week.title,
+      description: week.description,
+      weekNumber: week.weekNumber,
     });
+    setIsEditingWeek(true);
+    setWeekDialogOpen(true);
+  };
 
-    const completedWeeks = updatedWeeks.filter((w) => w.completed).length;
-    const newProgress = Math.round(
-      (completedWeeks / course.weeks.length) * 100
-    );
+  const deleteWeekContent = async (weekNumber, contentId) => {
+    try {
+      const structureType = isCurrentUserUserA ? "userA" : "userB";
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/content/${contentId}`,
+        {
+          method: "DELETE",
+          headers: { auth: getToken() },
+        }
+      );
 
-    setCourse({
-      ...course,
-      weeks: updatedWeeks,
-      progress: newProgress,
-    });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete content");
 
-    toast.success(`Week ${weekNumber} marked as complete!`);
+      toast.success("Content deleted successfully!");
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // FIXED: Enhanced download function with better URL handling
+  const downloadFile = (fileUrl) => {
+    // Since files are in public/, the URL should work directly
+    const fullUrl = fileUrl.startsWith("http")
+      ? fileUrl
+      : `${API_BASE_URL}${fileUrl}`;
+    console.log("Downloading file from:", fullUrl); // Debug log
+    window.open(fullUrl, "_blank");
   };
 
   if (!course) {
@@ -284,26 +740,53 @@ export default function CoursePage() {
     );
   }
 
+  const currentWeeklyStructure = getCurrentWeeklyStructure();
+  const currentTeachingSkill = getTeachingSkill();
+  const currentProgress = getCurrentProgress();
+  const progressLabel = getProgressLabel();
+  const courseEndDate = getCourseEndDate();
+  const otherUser = getOtherUser();
+  const teacherUser = getTeacherUser();
+  const studentUser = getStudentUser();
+
+  // Check if course is pending
+  const isCoursePending = course.status === "pending";
+
+  // Check if current user can make appointments (both users can make appointments with each other)
+  const canMakeAppointments =
+    otherUser && getUserId() !== otherUser._id && !isCoursePending;
+
+  // For one-way exchange, determine roles
+  const isOneWay = course.exchangeType === "one-way";
+  const isTeacher = isCurrentUserTeacher();
+  const isStudent = isCurrentUserStudent();
+
+  // FIXED: Determine if user can upload files
+  const canUploadFiles =
+    (isOneWay && isTeacher) || (!isOneWay && activeTab === "myTeaching");
+
+  // FIXED: Check if current structure has any weeks to display
+  const hasWeeklyStructure =
+    currentWeeklyStructure && currentWeeklyStructure.length > 0;
+
   return (
     <>
-      <Toaster position="top-right" />
-
       {/* Modern Header */}
       <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 sm:gap-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 sm:gap-3 mb-3 flex-wrap">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4 lg:gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3 flex-wrap">
                 <Badge
                   variant="secondary"
-                  className="bg-white/20 text-white border-0 text-xs sm:text-sm"
+                  className="bg-white/20 text-white border-0 text-xs px-2 py-1"
                 >
-                  {course.duration} weeks
+                  {course.duration} {course.duration === 1 ? "week" : "weeks"}
                 </Badge>
                 <Badge
                   variant="secondary"
                   className={`
-                    text-xs sm:text-sm
+                    text-xs px-2 py-1
                     ${
                       course.status === "active"
                         ? "bg-green-500"
@@ -316,110 +799,319 @@ export default function CoursePage() {
                   {course.status.charAt(0).toUpperCase() +
                     course.status.slice(1)}
                 </Badge>
+                <Badge
+                  variant="secondary"
+                  className={`text-white border-0 text-xs px-2 py-1 ${
+                    isOneWay ? "bg-purple-500" : "bg-orange-500"
+                  }`}
+                >
+                  {isOneWay ? (
+                    <div className="flex items-center gap-1">
+                      <UserCheck className="w-3 h-3" />
+                      <span>One-Way Learning</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>Mutual Exchange</span>
+                    </div>
+                  )}
+                </Badge>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 leading-tight">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold mb-2 sm:mb-3 leading-tight break-words">
                 {course.title}
               </h1>
-              <p className="text-blue-100 text-base sm:text-lg lg:text-xl max-w-4xl leading-relaxed">
+              <p className="text-blue-100 text-sm sm:text-base lg:text-lg xl:text-xl max-w-4xl leading-relaxed break-words">
                 {course.description}
               </p>
+
+              {/* Exchange Details */}
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 lg:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
+                {isOneWay ? (
+                  // One-Way Exchange Layout
+                  <>
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3">
+                      <GraduationCap className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-green-300" />
+                      <div>
+                        <div className="font-semibold text-green-300">
+                          Teacher
+                        </div>
+                        <div className="truncate">{teacherUser?.fullName}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3">
+                      <Book className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-blue-300" />
+                      <div>
+                        <div className="font-semibold text-blue-300">
+                          Student
+                        </div>
+                        <div className="truncate">{studentUser?.fullName}</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  // Mutual Exchange Layout
+                  <>
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                      <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">
+                        <strong className="font-semibold">
+                          {course.userA.fullName}
+                        </strong>
+                        : {course.userATeaching.skill}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                      <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">
+                        <strong className="font-semibold">
+                          {course.userB.fullName}
+                        </strong>
+                        : {course.userBTeaching.skill}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {course.startDate && courseEndDate && (
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                    <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="truncate">
+                      {new Date(course.startDate).toLocaleDateString()} -{" "}
+                      {courseEndDate.toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* One-Way Role Indicator */}
+              {isOneWay && (
+                <div className="mt-3 sm:mt-4">
+                  <Badge
+                    variant="secondary"
+                    className={`
+                      text-xs px-3 py-1.5 border-0
+                      ${
+                        isTeacher
+                          ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                          : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isTeacher ? (
+                        <>
+                          <GraduationCap className="w-3 h-3" />
+                          <span>You are the Teacher</span>
+                        </>
+                      ) : (
+                        <>
+                          <Book className="w-3 h-3" />
+                          <span>You are the Student</span>
+                        </>
+                      )}
+                    </div>
+                  </Badge>
+                </div>
+              )}
             </div>
 
             {/* Progress Card */}
-            <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full lg:w-auto lg:min-w-80 mt-4 sm:mt-0">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <span className="font-semibold text-sm sm:text-base">
-                    Course Progress
+            <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full lg:w-72 xl:w-80 mt-3 sm:mt-0 flex-shrink-0">
+              <CardContent className="p-3 sm:p-4 lg:p-6">
+                <div className="flex items-center justify-between mb-2 sm:mb-3 lg:mb-4">
+                  <span className="font-semibold text-xs sm:text-sm lg:text-base">
+                    {progressLabel}
                   </span>
-                  <span className="text-xl sm:text-2xl font-bold">
-                    {course.progress}%
+                  <span className="text-lg sm:text-xl lg:text-2xl font-bold">
+                    {currentProgress}%
                   </span>
                 </div>
                 <Progress
-                  value={course.progress}
-                  className="h-2 sm:h-3 bg-white/20"
+                  value={currentProgress}
+                  className="h-1.5 sm:h-2 lg:h-3 bg-white/20"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="truncate">
-                      {course.users.userA.fullName} &{" "}
-                      {course.users.userB.fullName}
+                <div className="grid grid-cols-1 gap-1.5 sm:gap-2 lg:gap-3 mt-2 sm:mt-3 lg:mt-4 text-xs">
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                    <UsersIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="truncate text-xs sm:text-sm">
+                      {course.userA.fullName} & {course.userB.fullName}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="truncate">
-                      {course.startDate} to {course.endDate}
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                    <span className="truncate text-xs sm:text-sm">
+                      {course.exchangeType === "mutual"
+                        ? activeTab === "myLearning"
+                          ? `Learning: ${currentTeachingSkill}`
+                          : `Teaching: ${currentTeachingSkill}`
+                        : isTeacher
+                        ? `Teaching: ${currentTeachingSkill}`
+                        : `Learning: ${currentTeachingSkill}`}
                     </span>
                   </div>
                 </div>
+
+                {/* Make Appointment Button - Show for both users when course is active */}
+                {canMakeAppointments ? (
+                  <Button
+                    onClick={openAppointmentBookingModal}
+                    className="w-full mt-3 bg-white/20 hover:bg-white/30 text-white border-white/30 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2"
+                    variant="outline"
+                  >
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span className="truncate">Make Appointment</span>
+                  </Button>
+                ) : isCoursePending ? (
+                  <div className="w-full mt-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-2 text-center">
+                    <div className="flex items-center gap-1.5 justify-center text-yellow-200 text-xs">
+                      <Ban className="w-3 h-3" />
+                      <span>Course pending - features disabled</span>
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-4 gap-3">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <Button
-                onClick={() => setUploadDialogOpen(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-sm sm:text-base w-full sm:w-auto justify-center"
-                size="sm"
+      {/* Tab Navigation - Only show for mutual exchange */}
+      {course.exchangeType === "mutual" && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+            <div className="flex overflow-x-auto scrollbar-hide -mb-px">
+              <button
+                onClick={() => setActiveTab("myLearning")}
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
+                  activeTab === "myLearning"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
               >
-                <Upload className="w-4 h-4" />
-                Upload File
-              </Button>
-              <Button
-                onClick={() => setAppointmentDialogOpen(true)}
-                variant="outline"
-                className="flex items-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 text-sm sm:text-base w-full sm:w-auto justify-center"
-                size="sm"
+                <BookOpen className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">My Learning</span>
+                <Badge
+                  variant="secondary"
+                  className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5"
+                >
+                  {/* Show what you're learning (other user's skill) */}
+                  {isCurrentUserUserA
+                    ? course.userBTeaching.skill
+                    : course.userATeaching.skill}
+                </Badge>
+              </button>
+              <button
+                onClick={() => setActiveTab("myTeaching")}
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
+                  activeTab === "myTeaching"
+                    ? "border-green-500 text-green-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
               >
-                <Calendar className="w-4 h-4" />
-                Schedule Meeting
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3 justify-center sm:justify-start">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 text-sm sm:text-base"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Chat</span>
-              </Button>
+                <Users className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">My Teaching</span>
+                <Badge
+                  variant="secondary"
+                  className="ml-1 bg-green-100 text-green-800 text-xs px-1.5 py-0.5"
+                >
+                  {/* Show what you're teaching (your own skill) */}
+                  {isCurrentUserUserA
+                    ? course.userATeaching.skill
+                    : course.userBTeaching.skill}
+                </Badge>
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* One-Way Role Header */}
+      {isOneWay && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+            <div className="flex items-center justify-center py-4">
+              <div
+                className={`flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 rounded-full ${
+                  isTeacher
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : "bg-blue-50 text-blue-700 border border-blue-200"
+                }`}
+              >
+                {isTeacher ? (
+                  <>
+                    <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="font-semibold text-sm sm:text-base">
+                      {getRoleDescription()}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Book className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="font-semibold text-sm sm:text-base">
+                      {getRoleDescription()}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Bar - Show based on role and exchange type */}
+      {canUploadFiles && !isCoursePending && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center py-3 sm:py-4 gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <Button
+                  onClick={() => setUploadDialogOpen(true)}
+                  className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
+                  size="sm"
+                >
+                  <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span>Upload File</span>
+                </Button>
+              </div>
+              <div className="text-xs sm:text-sm text-gray-600">
+                {isOneWay ? (
+                  <span>Add learning materials for your student</span>
+                ) : (
+                  <span>Add teaching materials for your exchange partner</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Course Warning */}
+      {isCoursePending && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-3 sm:mx-4 lg:mx-6 mt-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <Ban className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Course Pending:</strong> File upload and appointment
+                features will be available once the course is active.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Course Content */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="space-y-4 sm:space-y-6">
-          {course.weeks.map((week) => (
-            <div
-              key={week.weekNumber}
-              className="min-h-[100px] sm:min-h-[120px]"
-            >
-              <Card
-                className={`
-                  border-l-4 transition-all duration-300
-                  ${
-                    week.completed
-                      ? "border-l-green-500 bg-green-50/50"
-                      : "border-l-blue-500 bg-white"
-                  }
-                  ${expandedWeeks.has(week.weekNumber) ? "mb-4 sm:mb-6" : ""}
-                `}
+      <div className="min-h-screen bg-gray-50/30 py-4 sm:py-6 lg:py-8">
+        <div className="mx-3 sm:mx-4 lg:mx-6 space-y-3 sm:space-y-4 lg:space-y-6">
+          {hasWeeklyStructure ? (
+            currentWeeklyStructure.map((week) => (
+              <div
+                key={week.weekNumber}
+                className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
               >
-                <CardHeader
+                <div
                   className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
                   onClick={() => toggleWeek(week.weekNumber)}
                 >
@@ -427,10 +1119,13 @@ export default function CoursePage() {
                     <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                       <div
                         className={`
-                          flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full mt-0 sm:mt-1 flex-shrink-0
+                          flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0
                           ${
                             week.completed
                               ? "bg-green-100 text-green-600"
+                              : (isOneWay && isTeacher) ||
+                                (!isOneWay && activeTab === "myTeaching")
+                              ? "bg-orange-100 text-orange-600"
                               : "bg-blue-100 text-blue-600"
                           }
                         `}
@@ -443,24 +1138,40 @@ export default function CoursePage() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-2 sm:gap-3 mb-2 flex-col sm:flex-row sm:items-center">
-                          <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 break-words leading-tight">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
+                          <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
                             Week {week.weekNumber}: {week.title}
-                          </CardTitle>
-                          {week.completed && (
-                            <Badge className="bg-green-500 text-white flex-shrink-0 text-xs">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Completed
-                            </Badge>
-                          )}
+                          </h3>
+                          <div className="flex gap-1 sm:gap-2 flex-wrap">
+                            {week.completed && (
+                              <Badge className="bg-green-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Completed
+                              </Badge>
+                            )}
+                            {((isOneWay && isTeacher) ||
+                              (!isOneWay && activeTab === "myTeaching")) &&
+                              !week.completed && (
+                                <Badge className="bg-orange-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                  {isOneWay ? "Teaching" : "Teaching"}
+                                </Badge>
+                              )}
+                            {((isOneWay && isStudent) ||
+                              (!isOneWay && activeTab === "myLearning")) &&
+                              !week.completed && (
+                                <Badge className="bg-blue-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                  Learning
+                                </Badge>
+                              )}
+                          </div>
                         </div>
                         <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
                           {week.description}
                         </p>
 
                         {/* Week Stats */}
-                        <div className="flex items-center gap-4 sm:gap-6 mt-2 sm:mt-3 text-xs sm:text-sm text-gray-500 flex-wrap">
-                          <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                             <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
                             <span>
                               {
@@ -471,50 +1182,58 @@ export default function CoursePage() {
                               docs
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                            <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                             <span>
                               {
                                 week.content.filter(
                                   (item) => item.type === "appointment"
                                 ).length
                               }{" "}
-                              meetings
+                              Sessions
                             </span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Button */}
-                    <div className="flex items-center flex-shrink-0 ml-2">
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          markWeekComplete(week.weekNumber);
-                        }}
-                        className={`
-                          whitespace-nowrap transition-all duration-200 text-xs sm:text-sm
-                          ${
-                            week.completed
-                              ? "bg-green-100 text-green-700 hover:bg-green-200 border-green-200"
-                              : "bg-green-600 hover:bg-green-700 text-white"
-                          }
-                        `}
-                        size="sm"
-                        variant={week.completed ? "outline" : "default"}
-                      >
-                        <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                        <span className="hidden xs:inline">
-                          {week.completed ? "Completed" : "Mark Complete"}
-                        </span>
-                        <span className="xs:hidden">
-                          {week.completed ? "Done" : "Complete"}
-                        </span>
-                      </Button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                      {canUploadFiles && !isCoursePending && (
+                        <>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              editWeek(week);
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                          >
+                            <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">Edit</span>
+                          </Button>
+                        </>
+                      )}
+                      {((isOneWay && isStudent) ||
+                        (!isOneWay && activeTab === "myLearning")) &&
+                        !week.completed &&
+                        !isCoursePending && (
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markWeekComplete(week.weekNumber);
+                            }}
+                            className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                            size="sm"
+                          >
+                            <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">Complete</span>
+                          </Button>
+                        )}
                     </div>
                   </div>
-                </CardHeader>
+                </div>
 
                 {/* Expandable Content */}
                 <div
@@ -522,22 +1241,26 @@ export default function CoursePage() {
                     overflow-hidden transition-all duration-300 ease-in-out
                     ${
                       expandedWeeks.has(week.weekNumber)
-                        ? "max-h-[2000px] opacity-100"
+                        ? "max-h-[2000px] opacity-100 border-t border-gray-200"
                         : "max-h-0 opacity-0"
                     }
                   `}
                 >
-                  <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 border-t">
+                  <div className="p-4 sm:p-6">
                     {/* Content Grid */}
-                    <div className="mt-4 sm:mt-6">
+                    <div className="mb-4 sm:mb-6">
                       {week.content.length === 0 ? (
-                        <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-200 rounded-lg">
-                          <FileText className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
-                          <p className="text-gray-500 text-base sm:text-lg">
+                        <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
+                          <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+                          <p className="text-gray-500 text-base sm:text-lg font-medium">
                             No content added yet for this week
                           </p>
                           <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
-                            Upload files or schedule meetings to get started
+                            {canUploadFiles
+                              ? isCoursePending
+                                ? "Upload files will be available once course is active"
+                                : "Upload files or schedule sessions to get started"
+                              : "Check back later for course materials"}
                           </p>
                         </div>
                       ) : (
@@ -545,7 +1268,7 @@ export default function CoursePage() {
                           {week.content.map((item) => (
                             <Card
                               key={item.id}
-                              className="hover:shadow-md transition-all duration-200 border"
+                              className="hover:shadow-lg transition-all duration-200 border border-gray-200"
                             >
                               <CardContent className="p-3 sm:p-4">
                                 <div className="flex items-start gap-2 sm:gap-3">
@@ -567,42 +1290,47 @@ export default function CoursePage() {
                                   </div>
                                 </div>
 
-                                <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t">
+                                <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
                                   <div className="flex items-center gap-1 sm:gap-2">
                                     {item.type === "document" && (
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="h-7 sm:h-8 text-xs sm:text-sm"
+                                        className="h-7 sm:h-8 text-xs"
+                                        onClick={() =>
+                                          downloadFile(item.fileUrl)
+                                        }
                                       >
                                         <Download className="w-3 h-3 mr-1" />
-                                        <span className="hidden xs:inline">
-                                          Download
-                                        </span>
-                                        <span className="xs:hidden">DL</span>
+                                        Download
                                       </Button>
                                     )}
                                     {item.type === "appointment" && (
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="h-7 sm:h-8 text-xs sm:text-sm"
+                                        className="h-7 sm:h-8 text-xs"
                                       >
-                                        <Calendar className="w-3 h-3 mr-1" />
-                                        <span className="hidden xs:inline">
-                                          Join
-                                        </span>
-                                        <span className="xs:hidden">Join</span>
+                                        <CalendarIcon className="w-3 h-3 mr-1" />
+                                        Join
                                       </Button>
                                     )}
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0"
-                                  >
-                                    <Trash2 className="w-3 h-3 sm:w-3 sm:h-3" />
-                                  </Button>
+                                  {canUploadFiles && !isCoursePending && (
+                                    <Button
+                                      onClick={() =>
+                                        deleteWeekContent(
+                                          week.weekNumber,
+                                          item.id
+                                        )
+                                      }
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               </CardContent>
                             </Card>
@@ -611,62 +1339,105 @@ export default function CoursePage() {
                       )}
                     </div>
 
-                    {/* Add Content Buttons */}
-                    <div className="flex gap-2 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t flex-wrap">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedWeek(week.weekNumber);
-                          setUploadForm((prev) => ({
-                            ...prev,
-                            week: week.weekNumber,
-                          }));
-                          setUploadDialogOpen(true);
-                        }}
-                        className="flex items-center gap-2 whitespace-nowrap text-xs sm:text-sm flex-1 sm:flex-none justify-center"
-                        size="sm"
-                      >
-                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                        Add File
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedWeek(week.weekNumber);
-                          setAppointmentForm((prev) => ({
-                            ...prev,
-                            week: week.weekNumber,
-                          }));
-                          setAppointmentDialogOpen(true);
-                        }}
-                        className="flex items-center gap-2 whitespace-nowrap text-xs sm:text-sm flex-1 sm:flex-none justify-center"
-                        size="sm"
-                      >
-                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                        Schedule Meeting
-                      </Button>
-                    </div>
-                  </CardContent>
+                    {/* Add Content Buttons - ONLY FOR TEACHING ROLE when course is active */}
+                    {canUploadFiles && !isCoursePending && (
+                      <div className="flex gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-gray-200">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedWeek(week.weekNumber);
+                            setUploadForm((prev) => ({
+                              ...prev,
+                              week: week.weekNumber,
+                            }));
+                            setUploadDialogOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 px-3 sm:px-4"
+                        >
+                          <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                          Add File
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedWeek(week.weekNumber);
+                            setAppointmentForm({ title: "", description: "" });
+                            openAppointmentBookingModal();
+                          }}
+                          className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 px-3 sm:px-4"
+                        >
+                          <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                          Schedule Meeting
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </Card>
+              </div>
+            ))
+          ) : (
+            // FIXED: Show empty state when no weekly structure exists
+            <div className="text-center py-12">
+              <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No Weekly Structure Available
+              </h3>
+              <p className="text-gray-500">
+                {isOneWay && isStudent
+                  ? "Your teacher hasn't set up the course content yet."
+                  : "Weekly structure will be available once the course is active."}
+              </p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
       {/* Upload File Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto">
+        <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto rounded-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Upload className="w-5 h-5" />
-              Upload File to Week {selectedWeek}
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+              Upload File
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUploadSubmit}>
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4 max-h-[60vh] overflow-y-auto px-1">
+              {/* Week Selection Dropdown */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
+                  Select Week *
+                </label>
+                <Select
+                  value={uploadForm.week.toString()}
+                  onValueChange={(value) =>
+                    setUploadForm({ ...uploadForm, week: parseInt(value) })
+                  }
+                >
+                  <SelectTrigger className="w-full h-10 sm:h-12">
+                    <SelectValue placeholder="Select a week" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hasWeeklyStructure ? (
+                      currentWeeklyStructure.map((week) => (
+                        <SelectItem
+                          key={week.weekNumber}
+                          value={week.weekNumber.toString()}
+                        >
+                          Week {week.weekNumber}: {week.title}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="1" disabled>
+                        No weeks available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
                   File Title *
                 </label>
                 <Input
@@ -676,11 +1447,11 @@ export default function CoursePage() {
                   }
                   placeholder="Enter file title"
                   required
-                  className="text-sm sm:text-base"
+                  className="text-sm sm:text-base h-10 sm:h-12"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
                   Description
                 </label>
                 <Textarea
@@ -697,12 +1468,12 @@ export default function CoursePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
                   Select File *
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center hover:border-blue-400 transition-colors">
-                  <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-4 lg:p-6 text-center hover:border-blue-400 transition-colors">
+                  <Upload className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-gray-400 mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Click to upload or drag and drop
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -710,7 +1481,7 @@ export default function CoursePage() {
                   </p>
                   <Input
                     type="file"
-                    className="mt-3 sm:mt-4 text-sm"
+                    className="mt-2 sm:mt-3 lg:mt-4 text-xs sm:text-sm"
                     onChange={(e) =>
                       setUploadForm({ ...uploadForm, file: e.target.files[0] })
                     }
@@ -719,138 +1490,191 @@ export default function CoursePage() {
                 </div>
               </div>
             </div>
-            <DialogFooter className="mt-6">
-              <Button type="submit" className="w-full text-sm sm:text-base">
-                Upload File
+            <DialogFooter className="mt-4 sm:mt-6">
+              <Button
+                type="submit"
+                className="w-full text-sm sm:text-base py-2 sm:py-3"
+                disabled={!hasWeeklyStructure}
+              >
+                {hasWeeklyStructure
+                  ? `Upload to Week ${uploadForm.week}`
+                  : "No Weeks Available"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Schedule Appointment Dialog */}
-      <Dialog
-        open={appointmentDialogOpen}
-        onOpenChange={setAppointmentDialogOpen}
-      >
-        <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto">
+      {/* Edit Week Dialog */}
+      <Dialog open={weekDialogOpen} onOpenChange={setWeekDialogOpen}>
+        <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto rounded-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Calendar className="w-5 h-5" />
-              Schedule Meeting for Week {selectedWeek}
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+              {isEditingWeek
+                ? `Edit Week ${weekForm.weekNumber}`
+                : "Add New Week"}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleAppointmentSubmit}>
-            <div className="space-y-4">
+          <form onSubmit={handleWeekSubmit}>
+            <div className="space-y-3 sm:space-y-4 max-h-[60vh] overflow-y-auto px-1">
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Meeting Title *
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
+                  Week Title *
                 </label>
                 <Input
-                  value={appointmentForm.title}
+                  value={weekForm.title}
                   onChange={(e) =>
-                    setAppointmentForm({
-                      ...appointmentForm,
-                      title: e.target.value,
+                    setWeekForm({ ...weekForm, title: e.target.value })
+                  }
+                  placeholder="Enter week title"
+                  required
+                  className="text-sm sm:text-base h-10 sm:h-12"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 sm:mb-2">
+                  Description *
+                </label>
+                <Textarea
+                  value={weekForm.description}
+                  onChange={(e) =>
+                    setWeekForm({
+                      ...weekForm,
+                      description: e.target.value,
                     })
                   }
-                  placeholder="Enter meeting title"
+                  placeholder="Week description and learning objectives"
+                  rows={3}
                   required
                   className="text-sm sm:text-base"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Description
-                </label>
-                <Textarea
-                  value={appointmentForm.description}
-                  onChange={(e) =>
-                    setAppointmentForm({
-                      ...appointmentForm,
-                      description: e.target.value,
-                    })
-                  }
-                  placeholder="Meeting agenda and objectives"
-                  rows={3}
-                  className="text-sm sm:text-base"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Date *
-                  </label>
-                  <Input
-                    type="date"
-                    value={appointmentForm.date}
-                    onChange={(e) =>
-                      setAppointmentForm({
-                        ...appointmentForm,
-                        date: e.target.value,
-                      })
-                    }
-                    required
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Time *
-                  </label>
-                  <Input
-                    type="time"
-                    value={appointmentForm.time}
-                    onChange={(e) =>
-                      setAppointmentForm({
-                        ...appointmentForm,
-                        time: e.target.value,
-                      })
-                    }
-                    required
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Duration
-                </label>
-                <Select
-                  value={appointmentForm.duration.toString()}
-                  onValueChange={(value) =>
-                    setAppointmentForm({
-                      ...appointmentForm,
-                      duration: parseInt(value),
-                    })
-                  }
-                >
-                  <SelectTrigger className="text-sm sm:text-base">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30" className="text-sm sm:text-base">
-                      30 minutes
-                    </SelectItem>
-                    <SelectItem value="45" className="text-sm sm:text-base">
-                      45 minutes
-                    </SelectItem>
-                    <SelectItem value="60" className="text-sm sm:text-base">
-                      60 minutes
-                    </SelectItem>
-                    <SelectItem value="90" className="text-sm sm:text-base">
-                      90 minutes
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
-            <DialogFooter className="mt-6">
-              <Button type="submit" className="w-full text-sm sm:text-base">
-                Schedule Meeting
+            <DialogFooter className="mt-4 sm:mt-6">
+              <Button
+                type="submit"
+                className="w-full text-sm sm:text-base py-2 sm:py-3"
+              >
+                {isEditingWeek ? "Update Week" : "Add Week"}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Make Appointment Modal */}
+      <Dialog
+        open={openAppointmentModal}
+        onOpenChange={setOpenAppointmentModal}
+      >
+        <DialogContent className="w-[95vw] max-w-md sm:max-w-lg mx-auto rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg lg:text-xl">
+              {course.exchangeType === "mutual"
+                ? activeTab === "myLearning"
+                  ? `Book Learning Session with ${selectedUser?.fullName}`
+                  : `Book Teaching Session with ${selectedUser?.fullName}`
+                : isCurrentUserTeacher()
+                ? `Book Teaching Session with ${selectedUser?.fullName}`
+                : `Book Learning Session with ${selectedUser?.fullName}`}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 sm:space-y-4 max-h-[60vh] overflow-y-auto px-1">
+            <div>
+              <label className="font-medium mb-1 sm:mb-2 block text-sm sm:text-base">
+                Meeting Title *
+              </label>
+              <Input
+                value={appointmentForm.title}
+                onChange={(e) =>
+                  setAppointmentForm({
+                    ...appointmentForm,
+                    title: e.target.value,
+                  })
+                }
+                placeholder="Enter meeting title"
+                required
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="font-medium mb-1 sm:mb-2 block text-sm sm:text-base">
+                Description
+              </label>
+              <Textarea
+                value={appointmentForm.description}
+                onChange={(e) =>
+                  setAppointmentForm({
+                    ...appointmentForm,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Meeting agenda and objectives"
+                rows={3}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="font-medium mb-1 sm:mb-2 block text-sm sm:text-base">
+                Select Date *
+              </label>
+              <div className="border rounded-md">
+                <Calendar
+                  mode="single"
+                  selected={newDate}
+                  onSelect={handleDateSelect}
+                  className="w-full"
+                  disabled={isDateDisabled}
+                />
+              </div>
+            </div>
+
+            {newDate &&
+              (availableTimes.length > 0 ? (
+                <div>
+                  <label className="font-medium mb-1 sm:mb-2 block text-sm sm:text-base">
+                    Available Times
+                  </label>
+                  <Select onValueChange={setNewTime} value={newTime}>
+                    <SelectTrigger className="w-full h-10 sm:h-12">
+                      <SelectValue placeholder="Select a time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTimes.map((time) => (
+                        <SelectItem key={time} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <p className="text-xs sm:text-sm text-gray-500 italic">
+                  {selectedUser?.fullName} is not available on this day.
+                </p>
+              ))}
+          </div>
+
+          <DialogFooter className="mt-3 sm:mt-4 flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 hover:bg-gray-100 transition text-sm sm:text-base py-2 sm:py-3"
+              onClick={() => setOpenAppointmentModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white transition text-sm sm:text-base py-2 sm:py-3"
+              onClick={handleBookAppointment}
+              disabled={!newTime || !newDate || !appointmentForm.title}
+            >
+              Make Appointment
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
