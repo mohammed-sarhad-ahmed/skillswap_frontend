@@ -37,6 +37,8 @@ import {
   CheckCircle,
   Clock,
   MessageCircle,
+  Eye,
+  RotateCcw,
 } from "lucide-react";
 
 export default function ConnectionsPage() {
@@ -320,7 +322,10 @@ export default function ConnectionsPage() {
 
   const handleViewCourse = (user) => {
     const activeCourse = user.existingCourses?.find(
-      (course) => course.status === "active" || course.status === "pending"
+      (course) =>
+        course.status === "active" ||
+        course.status === "pending" ||
+        course.status === "completed"
     );
 
     if (activeCourse) {
@@ -350,14 +355,15 @@ export default function ConnectionsPage() {
             Pending
           </Badge>
         );
+      // UPDATED: Show "No Active Course" when status is completed
       case "completed":
         return (
           <Badge
             variant="outline"
-            className="bg-blue-100 text-blue-800 border-blue-300 text-xs font-medium py-1 px-2"
+            className="bg-gray-100 text-gray-600 border-gray-300 text-xs font-medium py-1 px-2"
           >
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Completed
+            <Clock className="w-3 h-3 mr-1" />
+            No Active Course
           </Badge>
         );
       case "rejected":
@@ -386,70 +392,54 @@ export default function ConnectionsPage() {
   };
 
   const getCourseButton = (user) => {
-    switch (user.courseStatus) {
-      case "active":
+    // Check if there are any active or pending courses
+    const hasActiveOrPendingCourse = user.existingCourses?.some(
+      (course) => course.status === "active" || course.status === "pending"
+    );
+
+    // If there's an active or pending course, show the appropriate button
+    if (hasActiveOrPendingCourse) {
+      const activeCourse = user.existingCourses.find(
+        (course) => course.status === "active" || course.status === "pending"
+      );
+
+      if (activeCourse.status === "active") {
         return (
           <Button
-            className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
             onClick={() => handleViewCourse(user)}
           >
             <BookOpen className="w-4 h-4 mr-1" />
-            View Course
+            Continue Course
           </Button>
         );
-      case "pending":
+      } else if (activeCourse.status === "pending") {
         return (
           <Button
-            className="flex-1 px-4 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            className="w-full px-4 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
             onClick={() => handleViewCourse(user)}
           >
             <Clock className="w-4 h-4 mr-1" />
             View Proposal
           </Button>
         );
-      case "completed":
-        return (
-          <div className="flex gap-2 w-full">
-            <Button
-              variant="outline"
-              className="flex-1 px-3 py-2.5 border-blue-500 text-blue-600 hover:bg-blue-50 text-sm font-medium transition"
-              onClick={() =>
-                navigate(`/courses/${user.existingCourses[0]._id}`)
-              }
-            >
-              View Course
-            </Button>
-            <Button
-              className="flex-1 px-3 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium transition-all duration-200 transform hover:scale-105"
-              onClick={() => openCreateCourseModal(user)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              New Course
-            </Button>
-          </div>
-        );
-      case "rejected":
-      case "cancelled":
-        return (
-          <Button
-            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-            onClick={() => openCreateCourseModal(user)}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Create Course
-          </Button>
-        );
-      default:
-        return (
-          <Button
-            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-            onClick={() => openCreateCourseModal(user)}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Create Course
-          </Button>
-        );
+      }
     }
+
+    // UPDATED: Removed the specific "completed" check.
+    // Now, if a course is completed (or rejected/cancelled/none), it falls through here.
+    // This renders the "Propose Course" button.
+    // Combined with the "Visit Profile" button in the main return, you get exactly two buttons.
+
+    return (
+      <Button
+        className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+        onClick={() => openCreateCourseModal(user)}
+      >
+        <Plus className="w-4 h-4 mr-1" />
+        Propose Course
+      </Button>
+    );
   };
 
   return (
@@ -528,7 +518,7 @@ export default function ConnectionsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xlw-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto w-full">
               {currentConnections.map((user) => {
                 const teachingSkills = user.teachingSkills || [];
                 const learningSkills = user.learningSkills || [];
@@ -538,7 +528,7 @@ export default function ConnectionsPage() {
                 return (
                   <Card
                     key={user._id}
-                    className="flex flex-col w-full min-w-[320px] rounded-2xl border border-gray-200 bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 min-h-[460px] relative overflow-hidden"
+                    className="flex flex-col w-full min-w-[320px] rounded-2xl border border-gray-200 bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 min-h-[480px] relative overflow-hidden"
                   >
                     {/* Course Status Badge - Top Right */}
                     {user.courseStatus !== "none" && (
@@ -641,7 +631,8 @@ export default function ConnectionsPage() {
                           Visit Profile
                         </Button>
 
-                        {getCourseButton(user)}
+                        {/* Course button - layout handled in getCourseButton */}
+                        <div className="flex-1">{getCourseButton(user)}</div>
                       </div>
                     </div>
                   </Card>
@@ -830,7 +821,7 @@ export default function ConnectionsPage() {
                       <SelectValue
                         placeholder={
                           courseForm.justWantToLearn
-                            ? "Not required"
+                            ? "N/A (One-way learning)"
                             : "Select skill"
                         }
                       />
@@ -845,7 +836,7 @@ export default function ConnectionsPage() {
                         ))
                       ) : (
                         <SelectItem value="" disabled>
-                          No learning skills available
+                          No suitable skills available
                         </SelectItem>
                       )}
                     </SelectContent>
@@ -853,10 +844,9 @@ export default function ConnectionsPage() {
                 </div>
               </div>
 
-              {/* I just want to learn checkbox */}
-              <div className="flex items-center space-x-2 mt-2">
+              <div className="flex items-center space-x-2 pt-2">
                 <Checkbox
-                  id="justWantToLearn"
+                  id="justLearn"
                   checked={courseForm.justWantToLearn}
                   onCheckedChange={(checked) =>
                     setCourseForm({
@@ -869,34 +859,28 @@ export default function ConnectionsPage() {
                   }
                 />
                 <label
-                  htmlFor="justWantToLearn"
+                  htmlFor="justLearn"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  I just want to learn (no skill exchange needed)
+                  I just want to learn (One-way course)
                 </label>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-3 mt-6">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setOpenCourseModal(false)}
-              className="w-full sm:w-auto px-6 py-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+              className="mr-2"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreateCourse}
-              disabled={
-                !courseForm.title.trim() ||
-                !courseForm.userBTeachingSkill ||
-                (!courseForm.justWantToLearn && !courseForm.userATeachingSkill)
-              }
-              className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <BookOpen className="w-4 h-4 mr-2" />
-              Send Course Proposal
+              Send Proposal
             </Button>
           </DialogFooter>
         </DialogContent>

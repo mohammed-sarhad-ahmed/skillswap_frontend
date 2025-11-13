@@ -43,7 +43,7 @@ import {
   Book,
   UserCheck,
   Eye,
-  RotateCcw, // ADD THIS FOR UNDO ICON
+  RotateCcw,
 } from "lucide-react";
 import { useParams } from "react-router";
 import { getToken, getUserId } from "./ManageToken";
@@ -115,7 +115,7 @@ export default function CoursePage() {
     return isCurrentUserUserA ? course.userB : course.userA;
   };
 
-  // FIXED: Check if current user is the teacher
+  // Check if current user is the teacher
   const isCurrentUserTeacher = () => {
     if (!course) return false;
 
@@ -128,7 +128,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Check if current user is the student
+  // Check if current user is the student
   const isCurrentUserStudent = () => {
     if (!course) return false;
 
@@ -141,7 +141,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Get teacher user - SIMPLIFIED
+  // Get teacher user
   const getTeacherUser = () => {
     if (!course) return null;
 
@@ -162,7 +162,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Get student user - SIMPLIFIED
+  // Get student user
   const getStudentUser = () => {
     if (!course) return null;
 
@@ -190,17 +190,20 @@ export default function CoursePage() {
     let existingStructure = [];
 
     if (course.exchangeType === "mutual") {
-      // Mutual exchange:
-      // - Learning tab: show the other user's structure (what they're teaching you)
-      // - Teaching tab: show your own structure (what you're teaching them)
-      existingStructure =
-        activeTab === "myLearning"
-          ? isCurrentUserUserA
-            ? course.userBWeeklyStructure
-            : course.userAWeeklyStructure
-          : isCurrentUserUserA
-          ? course.userAWeeklyStructure
-          : course.userBWeeklyStructure;
+      // FIXED: Corrected the logic for mutual exchange
+      // - Learning tab: show userAWeeklyStructure when userB is learning (and vice versa)
+      // - Teaching tab: show userAWeeklyStructure when userA is teaching (and vice versa)
+      if (activeTab === "myLearning") {
+        // When user is learning, they see the OTHER user's structure
+        existingStructure = isCurrentUserUserA
+          ? course.userBWeeklyStructure // UserA learns from UserB's structure
+          : course.userAWeeklyStructure; // UserB learns from UserA's structure
+      } else {
+        // When user is teaching, they see their OWN structure
+        existingStructure = isCurrentUserUserA
+          ? course.userAWeeklyStructure // UserA teaches their own structure
+          : course.userBWeeklyStructure; // UserB teaches their own structure
+      }
     } else {
       // One-way exchange:
       // - Teacher sees their own structure (what they're teaching)
@@ -224,7 +227,7 @@ export default function CoursePage() {
     return existingStructure;
   };
 
-  // FIXED: Get the teaching skill for current context
+  // Get the teaching skill for current context
   const getTeachingSkill = () => {
     if (!course) return "";
 
@@ -252,34 +255,38 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Get progress for current context
+  // FIXED: Get progress for current context - CORRECTED LOGIC
   const getCurrentProgress = () => {
     if (!course) return 0;
 
     if (course.exchangeType === "mutual") {
-      // In mutual exchange:
-      // - Learning progress: your progress in learning from the other user
-      // - Teaching progress: your progress in teaching the other user
-      return activeTab === "myLearning"
-        ? isCurrentUserUserA
-          ? course.progress.userA
-          : course.progress.userB
-        : isCurrentUserUserA
-        ? course.progress.userB
-        : course.progress.userA;
+      // FIXED: Corrected progress logic for mutual exchange
+      if (activeTab === "myLearning") {
+        // Learning progress: userA sees userA progress, userB sees userB progress
+        return isCurrentUserUserA
+          ? course.progress.userA // UserA's learning progress
+          : course.progress.userB; // UserB's learning progress
+      } else {
+        // Teaching progress: userA sees userB progress (how much userB has learned from userA), userB sees userA progress
+        return isCurrentUserUserA
+          ? course.progress.userB // How much userB has learned from userA (userA's teaching effectiveness)
+          : course.progress.userA; // How much userA has learned from userB (userB's teaching effectiveness)
+      }
     } else {
       // One-way exchange: student sees their learning progress, teacher sees teaching progress
-      return isCurrentUserStudent()
-        ? isCurrentUserUserA
+      if (isCurrentUserStudent()) {
+        return isCurrentUserUserA
           ? course.progress.userA
-          : course.progress.userB
-        : isCurrentUserUserA
-        ? course.progress.userB
-        : course.progress.userA;
+          : course.progress.userB;
+      } else {
+        return isCurrentUserUserA
+          ? course.progress.userB
+          : course.progress.userA;
+      }
     }
   };
 
-  // FIXED: Get progress label for current context
+  // Get progress label for current context
   const getProgressLabel = () => {
     if (!course) return "";
 
@@ -292,7 +299,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Get role description for one-way exchange
+  // Get role description for one-way exchange
   const getRoleDescription = () => {
     if (!course || course.exchangeType !== "one-way") return "";
 
@@ -374,7 +381,7 @@ export default function CoursePage() {
     setAvailableTimes(times);
   };
 
-  // FIXED: Open appointment booking modal with correct roles
+  // Open appointment booking modal with correct roles
   const openAppointmentBookingModal = async () => {
     const otherUser = getOtherUser();
     if (!otherUser) return;
@@ -412,7 +419,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Handle appointment booking with correct roles
+  // Handle appointment booking with correct roles
   const handleBookAppointment = async () => {
     if (!newDate || !newTime || !appointmentForm.title) {
       toast.error("Select a date, time, and provide a title");
@@ -483,7 +490,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Add appointment to course with correct roles
+  // Add appointment to course with correct roles
   const addAppointmentToCourse = async (appointment, teacherId, studentId) => {
     try {
       const res = await fetch(
@@ -537,7 +544,7 @@ export default function CoursePage() {
     setExpandedWeeks(newExpanded);
   };
 
-  // FIXED: Enhanced file upload function with better error handling
+  // Enhanced file upload function with better error handling
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
 
@@ -555,14 +562,14 @@ export default function CoursePage() {
     // FIXED: Determine correct structure type based on context
     let structureType;
     if (course.exchangeType === "mutual") {
-      structureType =
-        activeTab === "myTeaching"
-          ? isCurrentUserUserA
-            ? "userA"
-            : "userB"
-          : isCurrentUserUserA
-          ? "userB"
-          : "userA";
+      // FIXED: Corrected structure type logic
+      if (activeTab === "myTeaching") {
+        // When teaching, upload to your own structure
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      } else {
+        // When learning, upload to the other user's structure (for them to see your submissions)
+        structureType = isCurrentUserUserA ? "userB" : "userA";
+      }
     } else {
       // One-way exchange
       if (isCurrentUserTeacher()) {
@@ -669,20 +676,54 @@ export default function CoursePage() {
     }
   };
 
-  // MARK WEEK AS COMPLETE
+  // FIXED: MARK WEEK AS COMPLETE - CORRECT LOGIC
   const markWeekComplete = async (weekNumber) => {
     try {
-      // Determine which structure type to mark as complete
-      // If current user is UserA, they should mark UserB's structure
-      // If current user is UserB, they should mark UserA's structure
-      const structureType = isCurrentUserUserA ? "userB" : "userA";
+      let structureType;
+      let progressType;
+
+      if (course.exchangeType === "mutual") {
+        if (activeTab === "myLearning") {
+          // When in Learning tab: mark the OTHER user's structure as complete
+          // This increases YOUR learning progress and THEIR teaching progress
+          structureType = isCurrentUserUserA ? "userB" : "userA";
+          progressType = "learning"; // For current user
+        } else {
+          // When in Teaching tab: mark YOUR OWN structure as complete
+          // This increases YOUR teaching progress (when student marks it complete)
+          structureType = isCurrentUserUserA ? "userA" : "userB";
+          progressType = "teaching"; // For current user
+        }
+      } else {
+        // One-way exchange
+        if (isCurrentUserStudent()) {
+          // Student marks teacher's structure as complete
+          // Increases student's learning progress and teacher's teaching progress
+          structureType = isCurrentUserUserA ? "userB" : "userA";
+          progressType = "learning";
+        } else {
+          // Teacher marks their own structure as complete
+          // Increases teacher's teaching progress (when student marks it)
+          structureType = isCurrentUserUserA ? "userA" : "userB";
+          progressType = "teaching";
+        }
+      }
 
       console.log("Marking week complete:", {
         courseId,
         weekNumber,
         structureType,
+        progressType,
         isCurrentUserUserA,
-        markingFor: isCurrentUserUserA ? "UserB (teacher)" : "UserA (student)",
+        activeTab,
+        context:
+          course.exchangeType === "mutual"
+            ? activeTab === "myLearning"
+              ? "Learning"
+              : "Teaching"
+            : isCurrentUserStudent()
+            ? "Learning"
+            : "Teaching",
       });
 
       const res = await fetch(
@@ -693,6 +734,10 @@ export default function CoursePage() {
             auth: getToken(),
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            progressType: progressType,
+            userId: getUserId(),
+          }),
         }
       );
 
@@ -709,21 +754,43 @@ export default function CoursePage() {
     }
   };
 
-  // UNDO WEEK COMPLETE - NEW FUNCTION
+  // FIXED: UNDO WEEK COMPLETE - CORRECT LOGIC
   const unmarkWeekComplete = async (weekNumber) => {
     try {
-      // Determine which structure type to unmark
-      // Same logic as markWeekComplete - UserA unsmarks UserB's structure, etc.
-      const structureType = isCurrentUserUserA ? "userB" : "userA";
+      let structureType;
+      let progressType;
+
+      if (course.exchangeType === "mutual") {
+        if (activeTab === "myLearning") {
+          structureType = isCurrentUserUserA ? "userB" : "userA";
+          progressType = "learning";
+        } else {
+          structureType = isCurrentUserUserA ? "userA" : "userB";
+          progressType = "teaching";
+        }
+      } else {
+        if (isCurrentUserStudent()) {
+          structureType = isCurrentUserUserA ? "userB" : "userA";
+          progressType = "learning";
+        } else {
+          structureType = isCurrentUserUserA ? "userA" : "userB";
+          progressType = "teaching";
+        }
+      }
 
       console.log("Unmarking week complete:", {
         courseId,
         weekNumber,
         structureType,
-        isCurrentUserUserA,
-        unmarkingFor: isCurrentUserUserA
-          ? "UserB (teacher)"
-          : "UserA (student)",
+        progressType,
+        context:
+          course.exchangeType === "mutual"
+            ? activeTab === "myLearning"
+              ? "Learning"
+              : "Teaching"
+            : isCurrentUserStudent()
+            ? "Learning"
+            : "Teaching",
       });
 
       const res = await fetch(
@@ -734,6 +801,10 @@ export default function CoursePage() {
             auth: getToken(),
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            progressType: progressType,
+            userId: getUserId(),
+          }),
         }
       );
 
@@ -781,7 +852,7 @@ export default function CoursePage() {
     }
   };
 
-  // FIXED: Enhanced download function that forces immediate download
+  // Enhanced download function that forces immediate download
   const downloadFile = async (fileUrl, fileName) => {
     try {
       const fullUrl = fileUrl.startsWith("http")
@@ -836,7 +907,7 @@ export default function CoursePage() {
     }
   };
 
-  // NEW: View file function - opens in new tab for preview
+  // View file function - opens in new tab for preview
   const viewFile = (fileUrl) => {
     const fullUrl = fileUrl.startsWith("http")
       ? fileUrl
@@ -846,7 +917,7 @@ export default function CoursePage() {
     window.open(fullUrl, "_blank", "noopener,noreferrer");
   };
 
-  // NEW: Check if file is viewable in browser (images, PDFs)
+  // Check if file is viewable in browser (images, PDFs)
   const isViewableFile = (fileType) => {
     const viewableTypes = ["pdf", "jpg", "jpeg", "png", "gif", "webp"];
     return viewableTypes.includes(fileType?.toLowerCase());
@@ -881,20 +952,20 @@ export default function CoursePage() {
   const isTeacher = isCurrentUserTeacher();
   const isStudent = isCurrentUserStudent();
 
-  // FIXED: Determine if user can upload files
+  // Determine if user can upload files
   const canUploadFiles =
     (isOneWay && isTeacher) || (!isOneWay && activeTab === "myTeaching");
 
-  // FIXED: Check if current structure has any weeks to display
+  // Check if current structure has any weeks to display
   const hasWeeklyStructure =
     currentWeeklyStructure && currentWeeklyStructure.length > 0;
 
   return (
     <>
-      {/* Modern Header */}
+      {/* FIXED: Modern Header - Made Responsive */}
       <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4 lg:gap-6">
+        <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+          <div className="flex flex-col xl:flex-row gap-4 lg:gap-6 xl:gap-8">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3 flex-wrap">
                 <Badge
@@ -946,23 +1017,23 @@ export default function CoursePage() {
                 {course.description}
               </p>
 
-              {/* Exchange Details */}
+              {/* Exchange Details - Made Responsive */}
               <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 lg:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
                 {isOneWay ? (
                   // One-Way Exchange Layout
                   <>
-                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3">
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <GraduationCap className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-green-300" />
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-semibold text-green-300">
                           Teacher
                         </div>
                         <div className="truncate">{teacherUser?.fullName}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3">
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <Book className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-blue-300" />
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-semibold text-blue-300">
                           Student
                         </div>
@@ -973,33 +1044,40 @@ export default function CoursePage() {
                 ) : (
                   // Mutual Exchange Layout
                   <>
-                    <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span className="truncate">
-                        <strong className="font-semibold">
+                      <div className="min-w-0">
+                        <div className="font-semibold">
                           {course.userA.fullName}
-                        </strong>
-                        : {course.userATeaching.skill}
-                      </span>
+                        </div>
+                        <div className="truncate text-blue-100">
+                          {course.userATeaching.skill}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span className="truncate">
-                        <strong className="font-semibold">
+                      <div className="min-w-0">
+                        <div className="font-semibold">
                           {course.userB.fullName}
-                        </strong>
-                        : {course.userBTeaching.skill}
-                      </span>
+                        </div>
+                        <div className="truncate text-blue-100">
+                          {course.userBTeaching.skill}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
                 {course.startDate && courseEndDate && (
-                  <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                     <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span className="truncate">
-                      {new Date(course.startDate).toLocaleDateString()} -{" "}
-                      {courseEndDate.toLocaleDateString()}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="font-semibold">Course Dates</div>
+                      <div className="truncate text-blue-100">
+                        {new Date(course.startDate).toLocaleDateString()} -{" "}
+                        {courseEndDate.toLocaleDateString()}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1036,8 +1114,8 @@ export default function CoursePage() {
               )}
             </div>
 
-            {/* Progress Card */}
-            <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full lg:w-72 xl:w-80 mt-3 sm:mt-0 flex-shrink-0">
+            {/* Progress Card - Made Responsive */}
+            <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full xl:w-80 mt-3 sm:mt-0 flex-shrink-0">
               <CardContent className="p-3 sm:p-4 lg:p-6">
                 <div className="flex items-center justify-between mb-2 sm:mb-3 lg:mb-4">
                   <span className="font-semibold text-xs sm:text-sm lg:text-base">
@@ -1098,7 +1176,7 @@ export default function CoursePage() {
       {/* Tab Navigation - Only show for mutual exchange */}
       {course.exchangeType === "mutual" && (
         <div className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
             <div className="flex overflow-x-auto scrollbar-hide -mb-px">
               <button
                 onClick={() => setActiveTab("myLearning")}
@@ -1181,7 +1259,7 @@ export default function CoursePage() {
       {/* Action Bar - Show based on role and exchange type */}
       {canUploadFiles && !isCoursePending && (
         <div className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center py-3 sm:py-4 gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <Button
@@ -1317,7 +1395,7 @@ export default function CoursePage() {
                       </div>
                     </div>
 
-                    {/* Action Buttons - UPDATED WITH UNDO FUNCTIONALITY */}
+                    {/* Action Buttons - UPDATED WITH CORRECT LOGIC */}
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {canUploadFiles && !isCoursePending && (
                         <>
@@ -1535,7 +1613,7 @@ export default function CoursePage() {
               </div>
             ))
           ) : (
-            // FIXED: Show empty state when no weekly structure exists
+            // Show empty state when no weekly structure exists
             <div className="text-center py-12">
               <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -1553,7 +1631,7 @@ export default function CoursePage() {
 
       {/* Upload File Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto rounded-lg">
+        <DialogContent className="max-w-md w-[95vw] sm:w-full rounded-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
               <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
