@@ -1476,7 +1476,7 @@ export default function CoursePage() {
                             {canUploadFiles
                               ? isCoursePending
                                 ? "Upload files will be available once course is active"
-                                : "Upload files or schedule sessions to get started"
+                                : "Check back later for course materials"
                               : "Check back later for course materials"}
                           </p>
                         </div>
@@ -1575,39 +1575,6 @@ export default function CoursePage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Add Content Buttons - ONLY FOR TEACHING ROLE when course is active */}
-                    {canUploadFiles && !isCoursePending && (
-                      <div className="flex gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-gray-200">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedWeek(week.weekNumber);
-                            setUploadForm((prev) => ({
-                              ...prev,
-                              week: week.weekNumber,
-                            }));
-                            setUploadDialogOpen(true);
-                          }}
-                          className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 px-3 sm:px-4"
-                        >
-                          <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                          Add File
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedWeek(week.weekNumber);
-                            setAppointmentForm({ title: "", description: "" });
-                            openAppointmentBookingModal();
-                          }}
-                          className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 px-3 sm:px-4"
-                        >
-                          <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                          Schedule Meeting
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
