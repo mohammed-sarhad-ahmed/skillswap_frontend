@@ -44,13 +44,15 @@ import {
   UserCheck,
   Eye,
   RotateCcw,
+  ExternalLink,
 } from "lucide-react";
-import { useParams } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { getToken, getUserId } from "./ManageToken";
 import { API_BASE_URL } from "./Config";
 
 export default function CoursePage() {
   const { courseId } = useParams();
+  const navigate = useNavigate();
   const [course, setCourse] = useState(null);
   const [activeTab, setActiveTab] = useState("myLearning");
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
@@ -330,6 +332,24 @@ export default function CoursePage() {
     return endDate;
   };
 
+  // NEW: Calculate which week a date falls into
+  const getWeekForDate = (date) => {
+    if (!course?.startDate) return 1;
+
+    const startDate = new Date(course.startDate);
+    const appointmentDate = new Date(date);
+
+    // Calculate difference in days
+    const diffTime = appointmentDate - startDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Calculate week number (1-based)
+    const weekNumber = Math.ceil(diffDays / 7);
+
+    // Ensure week number is within course duration
+    return Math.max(1, Math.min(weekNumber, course.duration));
+  };
+
   // FIXED: Filter appointments to show only relevant ones based on current user role
   const filterAppointmentsForCurrentContext = (weekContent) => {
     if (!weekContent || !course) return weekContent;
@@ -441,11 +461,20 @@ export default function CoursePage() {
     return times;
   };
 
+  // FIXED: Enhanced date disabling logic
   const isDateDisabled = (date) => {
     if (!selectedUser || !selectedUser.availability) return true;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // Disable dates before today
     if (date < today) return true;
+
+    // Disable dates after course end date
+    const courseEndDate = getCourseEndDate();
+    if (courseEndDate && date > courseEndDate) return true;
+
     const weekday = getWeekday(date);
     const dayData = selectedUser.availability[weekday];
     return !dayData || dayData.off;
@@ -473,6 +502,10 @@ export default function CoursePage() {
     }
 
     setAvailableTimes(times);
+
+    // Auto-select the week based on the chosen date
+    const calculatedWeek = getWeekForDate(date);
+    setSelectedWeek(calculatedWeek);
   };
 
   // Open appointment booking modal with correct roles
@@ -513,7 +546,7 @@ export default function CoursePage() {
     }
   };
 
-  // Handle appointment booking with correct roles
+  // FIXED: Handle appointment booking with correct week assignment
   const handleBookAppointment = async () => {
     if (!newDate || !newTime || !appointmentForm.title) {
       toast.error("Select a date, time, and provide a title");
@@ -540,6 +573,15 @@ export default function CoursePage() {
         studentId = getStudentUser()._id;
       }
 
+      // Calculate the correct week based on the selected date
+      const calculatedWeek = getWeekForDate(newDate);
+
+      console.log("Booking appointment:", {
+        date: newDate,
+        calculatedWeek,
+        courseDuration: course.duration,
+      });
+
       // Step 1: Create the appointment (will be in "pending" status)
       const appointmentRes = await fetch(`${API_BASE_URL}/appointments`, {
         method: "POST",
@@ -550,12 +592,12 @@ export default function CoursePage() {
         body: JSON.stringify({
           teacher: teacherId,
           student: studentId,
-          date: newDate.toISOString().split("T")[0],
+          date: newDate.toISOString(),
           time: newTime,
           title: appointmentForm.title,
           description: appointmentForm.description,
           courseId: course._id,
-          week: selectedWeek,
+          week: calculatedWeek, // Use calculated week instead of selectedWeek
         }),
       });
 
@@ -567,7 +609,7 @@ export default function CoursePage() {
 
       // Step 2: Add appointment to course week (but only show as pending)
       const courseRes = await fetch(
-        `${API_BASE_URL}/courses/${courseId}/weeks/${selectedWeek}/appointments`,
+        `${API_BASE_URL}/courses/${courseId}/weeks/${calculatedWeek}/appointments`,
         {
           method: "POST",
           headers: {
@@ -629,6 +671,11 @@ export default function CoursePage() {
     } catch (err) {
       toast.error(err.message);
     }
+  };
+
+  // NEW: Navigate to appointments page
+  const navigateToAppointments = () => {
+    navigate("/appointments");
   };
 
   const toggleWeek = (weekNumber) => {
@@ -1716,40 +1763,16 @@ export default function CoursePage() {
                                         {item.type === "appointment" &&
                                           appointmentData && (
                                             <>
+                                              {/* Manage Appointments Button */}
                                               <Button
                                                 variant="outline"
                                                 size="sm"
                                                 className="h-7 sm:h-8 text-xs"
-                                                disabled={
-                                                  appointmentData.status !==
-                                                  "confirmed"
-                                                }
+                                                onClick={navigateToAppointments}
                                               >
-                                                <CalendarIcon className="w-3 h-3 mr-1" />
-                                                {appointmentData.status ===
-                                                "confirmed"
-                                                  ? "Join"
-                                                  : "Pending"}
+                                                <ExternalLink className="w-3 h-3 mr-1" />
+                                                Manage
                                               </Button>
-                                              {/* Show cancel button for pending appointments */}
-                                              {appointmentData.status ===
-                                                "pending" && (
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="h-7 sm:h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                                                  onClick={() =>
-                                                    cancelAppointment(
-                                                      item.appointmentId,
-                                                      week.weekNumber,
-                                                      item.id
-                                                    )
-                                                  }
-                                                >
-                                                  <Ban className="w-3 h-3 mr-1" />
-                                                  Cancel
-                                                </Button>
-                                              )}
                                             </>
                                           )}
                                       </div>
@@ -2039,6 +2062,12 @@ export default function CoursePage() {
                   disabled={isDateDisabled}
                 />
               </div>
+              {courseEndDate && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Course ends on {courseEndDate.toLocaleDateString()}.
+                  Appointments can only be scheduled until this date.
+                </p>
+              )}
             </div>
 
             {newDate &&
@@ -2059,6 +2088,10 @@ export default function CoursePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-gray-500 mt-2">
+                    This appointment will be scheduled for Week{" "}
+                    {getWeekForDate(newDate)}
+                  </p>
                 </div>
               ) : (
                 <p className="text-xs sm:text-sm text-gray-500 italic">
