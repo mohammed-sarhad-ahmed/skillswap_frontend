@@ -23,6 +23,8 @@ export default function SkillsPage() {
   const usersPerPage = 8;
   const navigate = useNavigate();
 
+  console.log(users);
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
