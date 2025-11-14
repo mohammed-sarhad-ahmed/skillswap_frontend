@@ -55,7 +55,6 @@ export default function CoursePage() {
   const [activeTab, setActiveTab] = useState("myLearning");
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [uploadForm, setUploadForm] = useState({
@@ -156,9 +155,14 @@ export default function CoursePage() {
       }
     } else {
       // In one-way exchange, teacher is the one who did NOT propose
-      return course.proposedBy._id === course.userA._id
-        ? course.userB
-        : course.userA;
+
+      const value =
+        course.proposedBy._id === course.userA._id
+          ? course.userB
+          : course.userA;
+      console.log(value);
+
+      return value;
     }
   };
 
@@ -326,6 +330,96 @@ export default function CoursePage() {
     return endDate;
   };
 
+  // FIXED: Filter appointments to show only relevant ones based on current user role
+  const filterAppointmentsForCurrentContext = (weekContent) => {
+    if (!weekContent || !course) return weekContent;
+
+    const currentUserId = getUserId();
+
+    return weekContent.filter((item) => {
+      if (item.type !== "appointment") return true;
+
+      const appointmentData = getAppointmentDisplayData(item);
+
+      // If we can't get proper appointment data, show it (fallback)
+      if (
+        !appointmentData ||
+        !appointmentData.teacher ||
+        !appointmentData.student
+      ) {
+        return true;
+      }
+
+      // For mutual exchange
+      if (course.exchangeType === "mutual") {
+        if (activeTab === "myLearning") {
+          // In learning tab: show appointments where current user is student
+          return (
+            appointmentData.student._id === currentUserId ||
+            appointmentData.student === currentUserId
+          );
+        } else {
+          // In teaching tab: show appointments where current user is teacher
+          return (
+            appointmentData.teacher._id === currentUserId ||
+            appointmentData.teacher === currentUserId
+          );
+        }
+      } else {
+        // For one-way exchange
+        if (isCurrentUserStudent()) {
+          // Student sees appointments where they are student
+          return (
+            appointmentData.student._id === currentUserId ||
+            appointmentData.student === currentUserId
+          );
+        } else {
+          // Teacher sees appointments where they are teacher
+          return (
+            appointmentData.teacher._id === currentUserId ||
+            appointmentData.teacher === currentUserId
+          );
+        }
+      }
+    });
+  };
+
+  // FIXED: Format date and time properly for display
+  const formatAppointmentDateTime = (dateString, timeString) => {
+    try {
+      // Parse the date (handling both YYYY-MM-DD and ISO string)
+      let date;
+      if (dateString.includes("T")) {
+        date = new Date(dateString);
+      } else {
+        const [year, month, day] = dateString.split("-");
+        date = new Date(year, month - 1, day);
+      }
+
+      // Format date as local date
+      const formattedDate = date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+
+      // Format time (assuming HH:MM format)
+      let formattedTime = timeString;
+      if (timeString && timeString.includes(":")) {
+        const [hours, minutes] = timeString.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour % 12 || 12;
+        formattedTime = `${displayHour}:${minutes.padStart(2, "0")} ${ampm}`;
+      }
+
+      return `${formattedDate} • ${formattedTime}`;
+    } catch (error) {
+      console.error("Error formatting date/time:", error);
+      return `${dateString} • ${timeString}`;
+    }
+  };
+
   // Appointment booking functions
   const getWeekday = (date) =>
     date.toLocaleDateString("en-US", { weekday: "long" });
@@ -442,12 +536,12 @@ export default function CoursePage() {
           studentId = getOtherUser()._id;
         }
       } else {
-        // In one-way exchange, roles are fixed
         teacherId = getTeacherUser()._id;
         studentId = getStudentUser()._id;
       }
 
-      const res = await fetch(`${API_BASE_URL}/appointments`, {
+      // Step 1: Create the appointment (will be in "pending" status)
+      const appointmentRes = await fetch(`${API_BASE_URL}/appointments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -462,38 +556,17 @@ export default function CoursePage() {
           description: appointmentForm.description,
           courseId: course._id,
           week: selectedWeek,
-          // Add role context for the appointment
-          roleContext:
-            course.exchangeType === "mutual"
-              ? activeTab === "myLearning"
-                ? "learning"
-                : "teaching"
-              : isCurrentUserTeacher()
-              ? "teaching"
-              : "learning",
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message || "Failed to book appointment");
+      const appointmentData = await appointmentRes.json();
+      if (!appointmentRes.ok)
+        throw new Error(
+          appointmentData.message || "Failed to book appointment"
+        );
 
-      await addAppointmentToCourse(data.data.appointment, teacherId, studentId);
-
-      toast.success("Appointment booked successfully!");
-      setOpenAppointmentModal(false);
-      setNewDate(null);
-      setNewTime("");
-      setAppointmentForm({ title: "", description: "" });
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  // Add appointment to course with correct roles
-  const addAppointmentToCourse = async (appointment, teacherId, studentId) => {
-    try {
-      const res = await fetch(
+      // Step 2: Add appointment to course week (but only show as pending)
+      const courseRes = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${selectedWeek}/appointments`,
         {
           method: "POST",
@@ -502,35 +575,59 @@ export default function CoursePage() {
             auth: getToken(),
           },
           body: JSON.stringify({
-            title: appointmentForm.title || `Meeting - Week ${selectedWeek}`,
-            description: appointmentForm.description,
-            date: newDate.toISOString().split("T")[0],
-            time: newTime,
-            duration: 60,
-            appointmentId: appointment._id,
-            teacher: teacherId,
-            student: studentId,
-            // Add role context to the appointment content
-            roleContext:
-              course.exchangeType === "mutual"
-                ? activeTab === "myLearning"
-                  ? "learning"
-                  : "teaching"
-                : isCurrentUserTeacher()
-                ? "teaching"
-                : "learning",
+            appointmentId: appointmentData.data.appointment._id,
+            status: "pending",
           }),
         }
       );
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to add appointment to course");
+      if (!courseRes.ok) {
+        const courseData = await courseRes.json();
+        throw new Error(
+          courseData.message || "Failed to add appointment to course"
+        );
       }
 
-      fetchCourseDetails();
+      toast.success("Appointment proposal sent! Waiting for acceptance.");
+      setOpenAppointmentModal(false);
+      setNewDate(null);
+      setNewTime("");
+      setAppointmentForm({ title: "", description: "" });
+      fetchCourseDetails(); // Refresh course data
     } catch (err) {
-      console.error("Failed to add appointment to course:", err);
+      toast.error(err.message);
+    }
+  };
+
+  // Add this function to cancel pending appointments
+  const cancelAppointment = async (appointmentId, weekNumber, contentId) => {
+    try {
+      // Update appointment status to cancelled
+      const appointmentRes = await fetch(
+        `${API_BASE_URL}/appointments/${appointmentId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+          body: JSON.stringify({
+            status: "canceled",
+          }),
+        }
+      );
+
+      if (!appointmentRes.ok) {
+        const data = await appointmentRes.json();
+        throw new Error(data.message || "Failed to cancel appointment");
+      }
+
+      // Remove appointment from course content
+      await deleteWeekContent(weekNumber, contentId);
+
+      toast.success("Appointment cancelled successfully!");
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -923,6 +1020,32 @@ export default function CoursePage() {
     return viewableTypes.includes(fileType?.toLowerCase());
   };
 
+  // FIXED: Get appointment display data - handles both old and new structure properly
+  const getAppointmentDisplayData = (item) => {
+    // If appointmentId is populated (new structure)
+    if (item.appointmentId && typeof item.appointmentId === "object") {
+      return {
+        title: item.appointmentId.title,
+        date: item.appointmentId.date,
+        time: item.appointmentId.time,
+        status: item.appointmentId.status,
+        teacher: item.appointmentId.teacher,
+        student: item.appointmentId.student,
+        description: item.appointmentId.description,
+      };
+    }
+    // If using old structure (fallback) or if appointmentId is not properly populated
+    return {
+      title: item.title || "Appointment",
+      date: item.date,
+      time: item.time,
+      status: item.status,
+      teacher: item.teacher,
+      student: item.student,
+      description: item.description,
+    };
+  };
+
   if (!course) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -1304,281 +1427,362 @@ export default function CoursePage() {
       <div className="min-h-screen bg-gray-50/30 py-4 sm:py-6 lg:py-8">
         <div className="mx-3 sm:mx-4 lg:mx-6 space-y-3 sm:space-y-4 lg:space-y-6">
           {hasWeeklyStructure ? (
-            currentWeeklyStructure.map((week) => (
-              <div
-                key={week.weekNumber}
-                className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-              >
+            currentWeeklyStructure.map((week) => {
+              // Filter content to show only relevant appointments for current context
+              const filteredContent = filterAppointmentsForCurrentContext(
+                week.content
+              );
+
+              return (
                 <div
-                  className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
-                  onClick={() => toggleWeek(week.weekNumber)}
+                  key={week.weekNumber}
+                  className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <div className="flex items-start justify-between gap-3 sm:gap-4">
-                    <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                      <div
-                        className={`
-                          flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0
-                          ${
-                            week.completed
-                              ? "bg-green-100 text-green-600"
-                              : (isOneWay && isTeacher) ||
-                                (!isOneWay && activeTab === "myTeaching")
-                              ? "bg-orange-100 text-orange-600"
-                              : "bg-blue-100 text-blue-600"
-                          }
-                        `}
-                      >
-                        {expandedWeeks.has(week.weekNumber) ? (
-                          <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                        )}
-                      </div>
+                  <div
+                    className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                    onClick={() => toggleWeek(week.weekNumber)}
+                  >
+                    <div className="flex items-start justify-between gap-3 sm:gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                        <div
+                          className={`
+                            flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0
+                            ${
+                              week.completed
+                                ? "bg-green-100 text-green-600"
+                                : (isOneWay && isTeacher) ||
+                                  (!isOneWay && activeTab === "myTeaching")
+                                ? "bg-orange-100 text-orange-600"
+                                : "bg-blue-100 text-blue-600"
+                            }
+                          `}
+                        >
+                          {expandedWeeks.has(week.weekNumber) ? (
+                            <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                          )}
+                        </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
-                          <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
-                            Week {week.weekNumber}: {week.title}
-                          </h3>
-                          <div className="flex gap-1 sm:gap-2 flex-wrap">
-                            {week.completed && (
-                              <Badge className="bg-green-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Completed
-                              </Badge>
-                            )}
-                            {((isOneWay && isTeacher) ||
-                              (!isOneWay && activeTab === "myTeaching")) &&
-                              !week.completed && (
-                                <Badge className="bg-orange-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                  {isOneWay ? "Teaching" : "Teaching"}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
+                            <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
+                              Week {week.weekNumber}: {week.title}
+                            </h3>
+                            <div className="flex gap-1 sm:gap-2 flex-wrap">
+                              {week.completed && (
+                                <Badge className="bg-green-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Completed
                                 </Badge>
                               )}
-                            {((isOneWay && isStudent) ||
-                              (!isOneWay && activeTab === "myLearning")) &&
-                              !week.completed && (
-                                <Badge className="bg-blue-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                  Learning
-                                </Badge>
-                              )}
+                              {((isOneWay && isTeacher) ||
+                                (!isOneWay && activeTab === "myTeaching")) &&
+                                !week.completed && (
+                                  <Badge className="bg-orange-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                    {isOneWay ? "Teaching" : "Teaching"}
+                                  </Badge>
+                                )}
+                              {((isOneWay && isStudent) ||
+                                (!isOneWay && activeTab === "myLearning")) &&
+                                !week.completed && (
+                                  <Badge className="bg-blue-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                    Learning
+                                  </Badge>
+                                )}
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
-                          {week.description}
-                        </p>
+                          <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
+                            {week.description}
+                          </p>
 
-                        {/* Week Stats */}
-                        <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
-                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span>
-                              {
-                                week.content.filter(
-                                  (item) => item.type === "document"
-                                ).length
-                              }{" "}
-                              docs
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                            <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span>
-                              {
-                                week.content.filter(
-                                  (item) => item.type === "appointment"
-                                ).length
-                              }{" "}
-                              Sessions
-                            </span>
+                          {/* Week Stats */}
+                          <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                              <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <span>
+                                {
+                                  filteredContent.filter(
+                                    (item) => item.type === "document"
+                                  ).length
+                                }{" "}
+                                docs
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                              <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <span>
+                                {
+                                  filteredContent.filter(
+                                    (item) => item.type === "appointment"
+                                  ).length
+                                }{" "}
+                                Sessions
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Action Buttons - UPDATED WITH CORRECT LOGIC */}
-                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                      {canUploadFiles && !isCoursePending && (
-                        <>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              editWeek(week);
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                          >
-                            <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">Edit</span>
-                          </Button>
-                        </>
-                      )}
-
-                      {/* Show Complete/Undo Complete buttons based on completion status */}
-                      {((isOneWay && isStudent) ||
-                        (!isOneWay && activeTab === "myLearning")) &&
-                        !isCoursePending && (
+                      {/* Action Buttons - UPDATED WITH CORRECT LOGIC */}
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        {canUploadFiles && !isCoursePending && (
                           <>
-                            {!week.completed ? (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markWeekComplete(week.weekNumber);
-                                }}
-                                className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
-                                size="sm"
-                              >
-                                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                <span className="hidden sm:inline">
-                                  Complete
-                                </span>
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  unmarkWeekComplete(week.weekNumber);
-                                }}
-                                className="flex items-center gap-1 sm:gap-2 bg-gray-600 hover:bg-gray-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
-                                size="sm"
-                              >
-                                <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
-                                <span className="hidden sm:inline">Undo</span>
-                              </Button>
-                            )}
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                editWeek(week);
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                            >
+                              <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </Button>
                           </>
                         )}
+
+                        {/* Show Complete/Undo Complete buttons based on completion status */}
+                        {((isOneWay && isStudent) ||
+                          (!isOneWay && activeTab === "myLearning")) &&
+                          !isCoursePending && (
+                            <>
+                              {!week.completed ? (
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markWeekComplete(week.weekNumber);
+                                  }}
+                                  className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                  size="sm"
+                                >
+                                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <span className="hidden sm:inline">
+                                    Complete
+                                  </span>
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    unmarkWeekComplete(week.weekNumber);
+                                  }}
+                                  className="flex items-center gap-1 sm:gap-2 bg-gray-600 hover:bg-gray-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                  size="sm"
+                                >
+                                  <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <span className="hidden sm:inline">Undo</span>
+                                </Button>
+                              )}
+                            </>
+                          )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Expandable Content */}
-                <div
-                  className={`
-                    overflow-hidden transition-all duration-300 ease-in-out
-                    ${
-                      expandedWeeks.has(week.weekNumber)
-                        ? "max-h-[2000px] opacity-100 border-t border-gray-200"
-                        : "max-h-0 opacity-0"
-                    }
-                  `}
-                >
-                  <div className="p-4 sm:p-6">
-                    {/* Content Grid */}
-                    <div className="mb-4 sm:mb-6">
-                      {week.content.length === 0 ? (
-                        <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
-                          <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
-                          <p className="text-gray-500 text-base sm:text-lg font-medium">
-                            No content added yet for this week
-                          </p>
-                          <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
-                            {canUploadFiles
-                              ? isCoursePending
-                                ? "Upload files will be available once course is active"
-                                : "Check back later for course materials"
-                              : "Check back later for course materials"}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                          {week.content.map((item) => (
-                            <Card
-                              key={item.id}
-                              className="hover:shadow-lg transition-all duration-200 border border-gray-200"
-                            >
-                              <CardContent className="p-3 sm:p-4">
-                                <div className="flex items-start gap-2 sm:gap-3">
-                                  {getFileIcon(item.fileType, item.type)}
-                                  <div className="flex-1 min-w-0">
-                                    <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
-                                      {item.title}
-                                    </h4>
-                                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                                      {item.type === "appointment"
-                                        ? `${item.date} • ${item.time} • ${item.duration}min`
-                                        : `Uploaded ${item.uploadDate} • ${item.size}`}
-                                    </p>
-                                    {item.description && (
-                                      <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2 break-words">
-                                        {item.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
+                  {/* Expandable Content */}
+                  <div
+                    className={`
+                      overflow-hidden transition-all duration-300 ease-in-out
+                      ${
+                        expandedWeeks.has(week.weekNumber)
+                          ? "max-h-[2000px] opacity-100 border-t border-gray-200"
+                          : "max-h-0 opacity-0"
+                      }
+                    `}
+                  >
+                    <div className="p-4 sm:p-6">
+                      {/* Content Grid */}
+                      <div className="mb-4 sm:mb-6">
+                        {filteredContent.length === 0 ? (
+                          <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
+                            <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+                            <p className="text-gray-500 text-base sm:text-lg font-medium">
+                              No content added yet for this week
+                            </p>
+                            <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
+                              {canUploadFiles
+                                ? isCoursePending
+                                  ? "Upload files will be available once course is active"
+                                  : "Check back later for course materials"
+                                : "Check back later for course materials"}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                            {filteredContent.map((item) => {
+                              const appointmentData =
+                                item.type === "appointment"
+                                  ? getAppointmentDisplayData(item)
+                                  : null;
 
-                                <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
-                                  <div className="flex items-center gap-1 sm:gap-2">
-                                    {item.type === "document" && (
-                                      <>
-                                        {/* View Button - only for viewable files */}
-                                        {isViewableFile(item.fileType) && (
+                              return (
+                                <Card
+                                  key={item.id}
+                                  className="hover:shadow-lg transition-all duration-200 border border-gray-200"
+                                >
+                                  <CardContent className="p-3 sm:p-4">
+                                    <div className="flex items-start gap-2 sm:gap-3">
+                                      {getFileIcon(item.fileType, item.type)}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
+                                            {item.type === "appointment"
+                                              ? appointmentData?.title ||
+                                                "Appointment"
+                                              : item.title}
+                                          </h4>
+                                          {item.type === "appointment" &&
+                                            appointmentData && (
+                                              <Badge
+                                                variant={
+                                                  appointmentData.status ===
+                                                  "confirmed"
+                                                    ? "default"
+                                                    : appointmentData.status ===
+                                                      "pending"
+                                                    ? "secondary"
+                                                    : "destructive"
+                                                }
+                                                className="text-xs"
+                                              >
+                                                {appointmentData.status ===
+                                                "confirmed"
+                                                  ? "Confirmed"
+                                                  : appointmentData.status ===
+                                                    "pending"
+                                                  ? "Pending"
+                                                  : "Cancelled"}
+                                              </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                                          {item.type === "appointment" &&
+                                          appointmentData
+                                            ? formatAppointmentDateTime(
+                                                appointmentData.date,
+                                                appointmentData.time
+                                              )
+                                            : `Uploaded ${item.uploadDate} • ${item.size}`}
+                                        </p>
+                                        {(item.description ||
+                                          (item.type === "appointment" &&
+                                            appointmentData?.description)) && (
+                                          <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2 break-words">
+                                            {item.type === "appointment"
+                                              ? appointmentData?.description
+                                              : item.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
+                                      <div className="flex items-center gap-1 sm:gap-2">
+                                        {item.type === "document" && (
+                                          <>
+                                            {/* View Button - only for viewable files */}
+                                            {isViewableFile(item.fileType) && (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 sm:h-8 text-xs"
+                                                onClick={() =>
+                                                  viewFile(item.fileUrl)
+                                                }
+                                              >
+                                                <Eye className="w-3 h-3 mr-1" />
+                                                View
+                                              </Button>
+                                            )}
+                                            {/* Download Button - for all files */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 sm:h-8 text-xs"
+                                              onClick={() =>
+                                                downloadFile(
+                                                  item.fileUrl,
+                                                  item.title
+                                                )
+                                              }
+                                            >
+                                              <Download className="w-3 h-3 mr-1" />
+                                              Download
+                                            </Button>
+                                          </>
+                                        )}
+                                        {item.type === "appointment" &&
+                                          appointmentData && (
+                                            <>
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 sm:h-8 text-xs"
+                                                disabled={
+                                                  appointmentData.status !==
+                                                  "confirmed"
+                                                }
+                                              >
+                                                <CalendarIcon className="w-3 h-3 mr-1" />
+                                                {appointmentData.status ===
+                                                "confirmed"
+                                                  ? "Join"
+                                                  : "Pending"}
+                                              </Button>
+                                              {/* Show cancel button for pending appointments */}
+                                              {appointmentData.status ===
+                                                "pending" && (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-7 sm:h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                                  onClick={() =>
+                                                    cancelAppointment(
+                                                      item.appointmentId,
+                                                      week.weekNumber,
+                                                      item.id
+                                                    )
+                                                  }
+                                                >
+                                                  <Ban className="w-3 h-3 mr-1" />
+                                                  Cancel
+                                                </Button>
+                                              )}
+                                            </>
+                                          )}
+                                      </div>
+                                      {canUploadFiles &&
+                                        !isCoursePending &&
+                                        item.type === "document" && (
                                           <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 sm:h-8 text-xs"
                                             onClick={() =>
-                                              viewFile(item.fileUrl)
+                                              deleteWeekContent(
+                                                week.weekNumber,
+                                                item.id
+                                              )
                                             }
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           >
-                                            <Eye className="w-3 h-3 mr-1" />
-                                            View
+                                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                           </Button>
                                         )}
-                                        {/* Download Button - for all files */}
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-7 sm:h-8 text-xs"
-                                          onClick={() =>
-                                            downloadFile(
-                                              item.fileUrl,
-                                              item.title
-                                            )
-                                          }
-                                        >
-                                          <Download className="w-3 h-3 mr-1" />
-                                          Download
-                                        </Button>
-                                      </>
-                                    )}
-                                    {item.type === "appointment" && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 sm:h-8 text-xs"
-                                      >
-                                        <CalendarIcon className="w-3 h-3 mr-1" />
-                                        Join
-                                      </Button>
-                                    )}
-                                  </div>
-                                  {canUploadFiles && !isCoursePending && (
-                                    <Button
-                                      onClick={() =>
-                                        deleteWeekContent(
-                                          week.weekNumber,
-                                          item.id
-                                        )
-                                      }
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             // Show empty state when no weekly structure exists
             <div className="text-center py-12">
