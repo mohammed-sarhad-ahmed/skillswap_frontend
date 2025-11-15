@@ -597,7 +597,7 @@ export default function CoursePage() {
           title: appointmentForm.title,
           description: appointmentForm.description,
           courseId: course._id,
-          week: calculatedWeek, // Use calculated week instead of selectedWeek
+          week: calculatedWeek,
         }),
       });
 
