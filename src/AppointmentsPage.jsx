@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { Badge } from "./components/ui/badge";
 import { Calendar } from "./components/ui/calendar";
 import {
   Select,
@@ -19,7 +21,25 @@ import {
 } from "./components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Textarea } from "./components/ui/textarea";
-import { Star, Filter, Search, User, Users } from "lucide-react";
+import {
+  Star,
+  Filter,
+  Search,
+  Book,
+  Calendar as CalendarIcon,
+  Clock,
+  ChevronDown,
+  ChevronRight,
+  Users,
+  User,
+  CheckCircle,
+  XCircle,
+  Clock as ClockIcon,
+  BookOpen,
+  GraduationCap,
+  ExternalLink,
+  RotateCcw,
+} from "lucide-react";
 import { API_BASE_URL } from "./Config";
 import { getToken } from "./ManageToken";
 
@@ -102,9 +122,10 @@ function RatingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md mx-4">
+      <DialogContent className="sm:max-w-md mx-4 rounded-lg">
         <DialogHeader>
-          <DialogTitle className="text-lg sm:text-xl">
+          <DialogTitle className="text-lg sm:text-xl flex items-center gap-2">
+            <Star className="w-5 h-5 text-yellow-500" />
             {isEditing ? "Edit Your Review" : "Rate Your Session"}
           </DialogTitle>
         </DialogHeader>
@@ -148,7 +169,7 @@ function RatingDialog({
           <Button
             onClick={handleSubmit}
             disabled={submitting || rating === 0}
-            className="w-full sm:w-auto px-4 sm:px-6 py-2 text-sm sm:text-base"
+            className="w-full sm:w-auto px-4 sm:px-6 py-2 text-sm sm:text-base bg-blue-600 hover:bg-blue-700"
           >
             {submitting ? (
               <div className="flex items-center gap-2">
@@ -178,7 +199,7 @@ function Pagination({ currentPage, totalItems, itemsPerPage, onPageChange }) {
         className={`px-3 py-2 text-sm rounded-lg transition-all duration-300 ${
           currentPage === 1
             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-            : "bg-black text-white hover:bg-gray-800"
+            : "bg-blue-600 text-white hover:bg-blue-700"
         }`}
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -194,7 +215,7 @@ function Pagination({ currentPage, totalItems, itemsPerPage, onPageChange }) {
         className={`px-3 py-2 text-sm rounded-lg transition-all duration-300 ${
           currentPage === totalPages
             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-            : "bg-black text-white hover:bg-gray-800"
+            : "bg-blue-600 text-white hover:bg-blue-700"
         }`}
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
@@ -209,7 +230,7 @@ function Pagination({ currentPage, totalItems, itemsPerPage, onPageChange }) {
 function MobileFilterDrawer({ open, onClose, filters, onFiltersChange }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto rounded-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
@@ -316,27 +337,16 @@ function MobileFilterDrawer({ open, onClose, filters, onFiltersChange }) {
   );
 }
 
-// Role Badge Component
-function RoleBadge({ role, isCurrentUser }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-        isCurrentUser
-          ? "bg-blue-100 text-blue-700 border border-blue-300"
-          : role === "teacher"
-          ? "bg-purple-100 text-purple-700 border border-purple-300"
-          : "bg-green-100 text-green-700 border border-green-300"
-      }`}
-    >
-      {role === "teacher" ? (
-        <User className="w-3 h-3" />
-      ) : (
-        <Users className="w-3 h-3" />
-      )}
-      {isCurrentUser ? "You" : role}
-    </span>
-  );
-}
+// Format date in local style
+const formatLocalDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
+};
 
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
@@ -344,12 +354,13 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [courses, setCourses] = useState({});
   const [openModal, setOpenModal] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [newDate, setNewDate] = useState(null);
   const [availableTimes, setAvailableTimes] = useState([]);
   const [newTime, setNewTime] = useState("");
-  const [activeTab, setActiveTab] = useState("awaiting-action");
+  const [activeTab, setActiveTab] = useState("as-teacher");
 
   // Rating states
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
@@ -372,6 +383,42 @@ export default function AppointmentsPage() {
 
   // Mobile states
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Fetch course information with full details including end date
+  const fetchCoursesForAppointments = async (appointmentsList) => {
+    const courseIds = [
+      ...new Set(appointmentsList.map((appt) => appt.courseId).filter(Boolean)),
+    ];
+    const coursesMap = {};
+
+    await Promise.all(
+      courseIds.map(async (courseId) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
+            headers: { auth: getToken() },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            coursesMap[courseId] = data.data.course;
+          } else {
+            console.warn(`Failed to fetch course ${courseId}`);
+            coursesMap[courseId] = {
+              title: `Course ${courseId.substring(0, 8)}...`,
+              _id: courseId,
+            };
+          }
+        } catch (err) {
+          console.error(`Failed to fetch course ${courseId}:`, err);
+          coursesMap[courseId] = {
+            title: `Course ${courseId.substring(0, 8)}...`,
+            _id: courseId,
+          };
+        }
+      })
+    );
+
+    setCourses(coursesMap);
+  };
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -399,6 +446,8 @@ export default function AppointmentsPage() {
         })
       );
       setAppointments(updatedAppointments);
+
+      await fetchCoursesForAppointments(updatedAppointments);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -455,7 +504,7 @@ export default function AppointmentsPage() {
         return false;
       }
 
-      // Request type filter - FIXED: Compare with userId, not role
+      // Request type filter
       if (filters.requestType !== "all") {
         const iRequested = appt.proposedBy === userId;
         if (filters.requestType === "i-requested" && !iRequested) return false;
@@ -490,13 +539,18 @@ export default function AppointmentsPage() {
           break;
       }
 
-      // Search filter
+      // Search filter - searches in title and course name only
       if (filters.search) {
         const searchTerm = filters.search.toLowerCase();
-        const otherPerson =
-          userRole === "teacher" ? appt.student : appt.teacher;
-        if (!otherPerson.fullName.toLowerCase().includes(searchTerm))
+        const course = courses[appt.courseId];
+        const courseName = course?.title || "";
+
+        if (
+          !appt.title?.toLowerCase().includes(searchTerm) &&
+          !courseName.toLowerCase().includes(searchTerm)
+        ) {
           return false;
+        }
       }
 
       return true;
@@ -527,31 +581,37 @@ export default function AppointmentsPage() {
     return filtered;
   };
 
-  // FIXED: Correct categorization using userId comparison
+  // Categorize appointments into the 3 clear tabs
   const getCategorizedAppointments = () => {
-    const needMyApproval = []; // They requested (proposedBy !== userId), I need to approve
-    const myPendingRequests = []; // I requested (proposedBy === userId), waiting for their approval
-    const otherAppointments = []; // Everything else (confirmed, completed)
+    const asTeacher = []; // All appointments where I'm the teacher
+    const asStudent = []; // All appointments where I'm the student
+    const needMyAction = []; // Only pending appointments that need my approval
 
     appointments.forEach((appt) => {
+      const iAmTeacher = appt.teacher._id === userId;
+      const iAmStudent = appt.student._id === userId;
       const iRequested = appt.proposedBy === userId;
 
-      if (appt.status === "pending") {
-        if (iRequested) {
-          myPendingRequests.push(appt);
-        } else {
-          needMyApproval.push(appt);
-        }
-      } else {
-        otherAppointments.push(appt);
+      // As Teacher tab - all appointments where I'm the teacher
+      if (iAmTeacher) {
+        asTeacher.push(appt);
+      }
+
+      // As Student tab - all appointments where I'm the student
+      if (iAmStudent) {
+        asStudent.push(appt);
+      }
+
+      // Need My Action tab - only pending appointments where I didn't request it
+      if (appt.status === "pending" && !iRequested) {
+        needMyAction.push(appt);
       }
     });
 
-    return { needMyApproval, myPendingRequests, otherAppointments };
+    return { asTeacher, asStudent, needMyAction };
   };
 
-  const { needMyApproval, myPendingRequests, otherAppointments } =
-    getCategorizedAppointments();
+  const { asTeacher, asStudent, needMyAction } = getCategorizedAppointments();
 
   const handleRateAppointment = (appointment) => {
     setSelectedApptForRating(appointment);
@@ -627,11 +687,25 @@ export default function AppointmentsPage() {
     return times;
   };
 
+  // Check if date is within course duration and teacher availability
   const isDateDisabled = (date) => {
     if (!selectedAppt || !selectedAppt.teacher.availability) return true;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // Disable past dates
     if (date < today) return true;
+
+    // Check if date is within course duration
+    const course = courses[selectedAppt.courseId];
+    if (course && course.endDate) {
+      const courseEndDate = new Date(course.endDate);
+      courseEndDate.setHours(23, 59, 59, 999); // End of the last day
+      if (date > courseEndDate) return true;
+    }
+
+    // Check teacher availability
     const weekday = getWeekday(date);
     const dayData = selectedAppt.teacher.availability[weekday];
     return !dayData || dayData.off;
@@ -706,6 +780,18 @@ export default function AppointmentsPage() {
       toast.error("Please select both a new date and time");
       return;
     }
+
+    // Additional validation to ensure the selected date is within course duration
+    const course = courses[selectedAppt.courseId];
+    if (course && course.endDate) {
+      const courseEndDate = new Date(course.endDate);
+      courseEndDate.setHours(23, 59, 59, 999);
+      if (newDate > courseEndDate) {
+        toast.error("Cannot reschedule beyond the course end date");
+        return;
+      }
+    }
+
     try {
       const res = await fetch(
         `${API_BASE_URL}/appointments/change-schedule/${selectedAppt._id}`,
@@ -733,33 +819,51 @@ export default function AppointmentsPage() {
     }
   };
 
-  const renderCards = (list) =>
+  const renderCards = (list, context) =>
     list.length === 0 ? (
-      <p className="text-center text-gray-500 mt-8 text-sm sm:text-base">
-        No appointments found.
-      </p>
+      <div className="text-center py-12">
+        <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">
+          No{" "}
+          {context === "as-teacher"
+            ? "Teaching"
+            : context === "as-student"
+            ? "Learning"
+            : "Pending"}{" "}
+          Sessions
+        </h3>
+        <p className="text-gray-500">
+          {context === "as-teacher" && "No teaching sessions scheduled yet."}
+          {context === "as-student" && "No learning sessions scheduled yet."}
+          {context === "need-action" && "No appointments need your action."}
+        </p>
+      </div>
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {list.map((appt) => {
           const existingRating = ratings[appt._id];
-
-          // FIXED: Compare proposedBy with userId, not role
           const iRequested = appt.proposedBy === userId;
+          const iAmTeacher = appt.teacher._id === userId;
+          const iAmStudent = appt.student._id === userId;
 
-          // Always show the person you're exchanging with
-          const otherPerson =
-            userRole === "teacher" ? appt.student : appt.teacher;
-          const otherPersonRole =
-            userRole === "teacher" ? "student" : "teacher";
+          // Always show the other person (the one you're exchanging with)
+          const otherPerson = iAmTeacher ? appt.student : appt.teacher;
+          const otherPersonRole = iAmTeacher ? "student" : "teacher";
 
-          const canRate =
-            appt.status === "completed" && iRequested && userRole === "student";
+          // Get course information
+          const course = courses[appt.courseId];
+          const courseName = course?.title || "Unknown Course";
+
+          const canRate = appt.status === "completed" && iAmStudent; // Students can rate completed sessions
 
           const hasRated = !!existingRating;
 
-          // FIXED: Correct logic using userId comparison
-          const needsMyApproval = !iRequested && appt.status === "pending";
-          const waitingTheirApproval = iRequested && appt.status === "pending";
+          // Action logic
+          const needsMyApproval = appt.status === "pending" && !iRequested;
+          const waitingTheirApproval = appt.status === "pending" && iRequested;
+
+          // Both users can reschedule confirmed appointments
+          const canReschedule = appt.status === "confirmed";
 
           return (
             <Card
@@ -767,151 +871,141 @@ export default function AppointmentsPage() {
               className={`flex flex-col justify-between h-full p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 bg-white border ${
                 needsMyApproval
                   ? "border-yellow-400 border-2"
-                  : "border-gray-200 hover:border-blue-300"
-              }`}
+                  : appt.status === "completed"
+                  ? "border-green-200"
+                  : appt.status === "confirmed"
+                  ? "border-blue-200"
+                  : appt.status === "canceled"
+                  ? "border-red-200"
+                  : "border-gray-200"
+              } hover:border-blue-300`}
             >
               <div className="flex-1">
-                <CardHeader className="flex items-center gap-3 p-0 mb-3">
-                  <img
-                    src={`${API_BASE_URL}/user_avatar/${otherPerson.avatar}`}
-                    alt={otherPerson.fullName}
-                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-blue-500"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base sm:text-lg font-semibold truncate">
-                      {otherPerson.fullName}
-                    </CardTitle>
-
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {/* Role badges */}
-                      <div className="flex gap-1">
-                        <RoleBadge role={userRole} isCurrentUser={true} />
-                        <RoleBadge
-                          role={otherPersonRole}
-                          isCurrentUser={false}
-                        />
+                {/* Session Header with Title and Course */}
+                <CardHeader className="p-0 mb-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                        {appt.title || "Learning Session"}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                        <Book className="w-4 h-4" />
+                        <span className="font-medium">{courseName}</span>
+                        {appt.week && (
+                          <Badge variant="outline" className="text-xs">
+                            Week {appt.week}
+                          </Badge>
+                        )}
                       </div>
-
-                      {/* Request badge */}
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          iRequested
-                            ? "bg-blue-100 text-blue-700 border border-blue-300"
-                            : "bg-purple-100 text-purple-700 border border-purple-300"
-                        }`}
-                      >
-                        {iRequested ? "You Requested" : "They Requested"}
-                      </span>
-
-                      {/* Action required badge - ONLY when they requested and pending */}
-                      {needsMyApproval && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300">
-                          Your Approval Needed
-                        </span>
-                      )}
                     </div>
+                  </div>
 
-                    {/* Rating display */}
-                    {userRole === "student" && existingRating && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <StarRating rating={existingRating.rating} size="sm" />
+                  {/* Session Description */}
+                  {appt.description && (
+                    <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                      <p className="text-sm text-gray-700">
+                        {appt.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* User Info */}
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={`${API_BASE_URL}/user_avatar/${otherPerson.avatar}`}
+                      alt={otherPerson.fullName}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-blue-500"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {otherPerson.fullName}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${
+                            iAmTeacher
+                              ? "bg-green-100 text-green-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {iAmTeacher ? (
+                            <div className="flex items-center gap-1">
+                              <GraduationCap className="w-3 h-3" />
+                              <span>Teacher</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <BookOpen className="w-3 h-3" />
+                              <span>Student</span>
+                            </div>
+                          )}
+                        </Badge>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-0 space-y-2 text-sm sm:text-base">
-                  <p>
-                    <strong>Date:</strong> {new Date(appt.date).toDateString()}
-                  </p>
-                  <p>
-                    <strong>Time:</strong> {appt.time}
-                  </p>
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    <span
-                      className={`font-semibold ${
-                        appt.status === "pending"
-                          ? "text-yellow-500"
-                          : appt.status === "confirmed"
-                          ? "text-green-500"
-                          : appt.status === "completed"
-                          ? "text-blue-500"
-                          : "text-red-500"
-                      }`}
+                {/* Session Details */}
+                <CardContent className="p-0 space-y-3 text-sm sm:text-base">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <CalendarIcon className="w-4 h-4" />
+                      <span>{formatLocalDate(appt.date)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Clock className="w-4 h-4" />
+                      <span>{appt.time}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Status: </span>
+                    <Badge
+                      className={`
+                        ${
+                          appt.status === "pending"
+                            ? "bg-yellow-500"
+                            : appt.status === "confirmed"
+                            ? "bg-green-500"
+                            : appt.status === "completed"
+                            ? "bg-blue-500"
+                            : "bg-red-500"
+                        } text-white
+                      `}
                     >
                       {appt.status.toUpperCase()}
-                    </span>
-                  </p>
-
-                  <div className="mt-3">
-                    <p className="text-sm font-medium text-gray-600 mb-1">
-                      {userRole === "teacher"
-                        ? "Student wants to learn:"
-                        : "Teacher can teach:"}
-                    </p>
-                    {(() => {
-                      const skills =
-                        userRole === "teacher"
-                          ? appt.student?.learningSkills
-                          : appt.teacher?.teachingSkills;
-
-                      if (!skills || skills.length === 0)
-                        return (
-                          <span className="text-gray-400 text-sm italic">
-                            Not specified
-                          </span>
-                        );
-
-                      let skillsArray = [];
-                      if (Array.isArray(skills)) {
-                        skillsArray = skills.map((s) =>
-                          typeof s === "object" && s.name ? s.name : String(s)
-                        );
-                      } else if (typeof skills === "string") {
-                        skillsArray = skills
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean);
-                      }
-
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {skillsArray.slice(0, 3).map((skill, i) => (
-                            <span
-                              key={i}
-                              className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                          {skillsArray.length > 3 && (
-                            <span className="text-xs text-gray-500">
-                              +{skillsArray.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    </Badge>
                   </div>
+
+                  {/* Rating display */}
+                  {iAmStudent && existingRating && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <StarRating rating={existingRating.rating} size="sm" />
+                      <span className="text-sm text-gray-600">Your rating</span>
+                    </div>
+                  )}
                 </CardContent>
               </div>
 
+              {/* Action Buttons */}
               <div className="mt-4 flex flex-wrap gap-2">
                 {/* Case 1: They requested & pending - I need to approve */}
                 {needsMyApproval && (
                   <>
                     <Button
-                      className="bg-green-500 hover:bg-green-600 text-white flex-1 min-w-[80px] text-sm py-2"
+                      className="bg-green-600 hover:bg-green-700 text-white flex-1 min-w-[80px] text-sm py-2"
                       onClick={() => handleConfirm(appt._id)}
                     >
+                      <CheckCircle className="w-4 h-4 mr-1" />
                       Accept
                     </Button>
                     <Button
                       variant="outline"
-                      className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[80px] text-sm py-2"
+                      className="text-red-600 border-red-600 hover:bg-red-50 flex-1 min-w-[80px] text-sm py-2"
                       onClick={() => handleCancel(appt._id)}
                     >
+                      <XCircle className="w-4 h-4 mr-1" />
                       Decline
                     </Button>
                   </>
@@ -925,46 +1019,48 @@ export default function AppointmentsPage() {
                     </p>
                     <Button
                       variant="outline"
-                      className="text-red-500 border-red-500 hover:bg-red-50 w-full text-sm py-2"
+                      className="text-red-600 border-red-600 hover:bg-red-50 w-full text-sm py-2"
                       onClick={() => handleCancel(appt._id)}
                     >
+                      <XCircle className="w-4 h-4 mr-1" />
                       Cancel Request
                     </Button>
                   </div>
                 )}
 
-                {/* Case 3: Confirmed appointments */}
+                {/* Case 3: Confirmed appointments - BOTH USERS CAN RESCHEDULE */}
                 {appt.status === "confirmed" && (
                   <>
                     <Button
                       variant="outline"
-                      className="text-red-500 border-red-500 hover:bg-red-50 flex-1 min-w-[80px] text-sm py-2"
+                      className="text-red-600 border-red-600 hover:bg-red-50 flex-1 min-w-[80px] text-sm py-2"
                       onClick={() => handleCancel(appt._id)}
                     >
+                      <XCircle className="w-4 h-4 mr-1" />
                       Cancel
                     </Button>
-                    {iRequested && (
-                      <Button
-                        variant="outline"
-                        className="text-blue-500 border-blue-500 hover:bg-blue-50 flex-1 min-w-[80px] text-sm py-2"
-                        onClick={() => handleRescheduleClick(appt)}
-                      >
-                        Reschedule
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      className="text-blue-600 border-blue-600 hover:bg-blue-50 flex-1 min-w-[80px] text-sm py-2"
+                      onClick={() => handleRescheduleClick(appt)}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1" />
+                      Reschedule
+                    </Button>
                   </>
                 )}
 
-                {/* Case 4: Completed sessions - rate if student requested */}
+                {/* Case 4: Completed sessions - rate if student */}
                 {appt.status === "completed" && canRate && (
                   <Button
                     className={`w-full text-sm py-2 ${
                       hasRated
-                        ? "bg-yellow-500 hover:bg-yellow-600"
-                        : "bg-purple-500 hover:bg-purple-600"
+                        ? "bg-yellow-600 hover:bg-yellow-700"
+                        : "bg-purple-600 hover:bg-purple-700"
                     } text-white`}
                     onClick={() => handleRateAppointment(appt)}
                   >
+                    <Star className="w-4 h-4 mr-1" />
                     {hasRated ? "Edit Review" : "Rate Session"}
                   </Button>
                 )}
@@ -982,355 +1078,379 @@ export default function AppointmentsPage() {
 
   if (loading || userId === null)
     return (
-      <p className="text-center mt-6 text-sm sm:text-base">
-        Loading appointments...
-      </p>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     );
 
-  // Use the correct filtered appointments for each tab
-  const filteredNeedMyApproval = getFilteredAppointments(needMyApproval);
-  const filteredMyPendingRequests = getFilteredAppointments(myPendingRequests);
-  const filteredOtherAppointments = getFilteredAppointments(otherAppointments);
+  // Filter appointments for each tab
+  const filteredAsTeacher = getFilteredAppointments(asTeacher);
+  const filteredAsStudent = getFilteredAppointments(asStudent);
+  const filteredNeedMyAction = getFilteredAppointments(needMyAction);
 
   return (
     <>
-      <div className="p-3 sm:p-4 md:p-6">
-        {/* Mobile Header */}
-        <div className="lg:hidden flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-xl font-semibold">Skill Exchange Sessions</h1>
-            <p className="text-gray-600 text-sm">
-              Manage your learning and teaching appointments
-            </p>
+      <div className="min-h-screen bg-gray-50/30">
+        {/* Modern Header */}
+        <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white">
+          <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+            <div className="flex flex-col xl:flex-row gap-4 lg:gap-6 xl:gap-8">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold mb-2 sm:mb-3 leading-tight break-words">
+                  Appointments
+                </h1>
+                <p className="text-blue-100 text-sm sm:text-base lg:text-lg xl:text-xl max-w-4xl leading-relaxed break-words">
+                  Manage your teaching and learning appointments
+                </p>
+              </div>
+
+              {/* Stats Card */}
+              <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full xl:w-80 mt-3 sm:mt-0 flex-shrink-0">
+                <CardContent className="p-3 sm:p-4 lg:p-6">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-lg sm:text-xl lg:text-2xl font-bold">
+                        {appointments.length}
+                      </div>
+                      <div className="text-xs sm:text-sm text-blue-100">
+                        Total Sessions
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-lg sm:text-xl lg:text-2xl font-bold">
+                        {needMyAction.length}
+                      </div>
+                      <div className="text-xs sm:text-sm text-blue-100">
+                        Need Action
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMobileFiltersOpen(true)}
-            className="flex items-center gap-2"
+        </div>
+
+        <div className="p-3 sm:p-4 md:p-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={(val) => {
+              setActiveTab(val);
+              setCurrentPage(1);
+              setPageKey((prev) => prev + 1);
+            }}
+            className="w-full"
           >
-            <Filter className="w-4 h-4" />
-            <span className="sm:hidden">Filter</span>
-          </Button>
-        </div>
-
-        {/* Desktop Header */}
-        <div className="hidden lg:block mb-6">
-          <h1 className="text-2xl font-semibold mb-2">
-            Skill Exchange Sessions
-          </h1>
-          <p className="text-gray-600">
-            Manage your learning and teaching appointments
-          </p>
-        </div>
-
-        <Tabs
-          value={activeTab}
-          onValueChange={(val) => {
-            setActiveTab(val);
-            setCurrentPage(1);
-            setPageKey((prev) => prev + 1);
-          }}
-          className="w-full"
-        >
-          <TabsList className="flex w-full max-w-full overflow-x-auto mb-6">
-            <TabsTrigger
-              value="awaiting-action"
-              className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2"
-            >
-              Need My Approval
-              {needMyApproval.length > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1">
-                  {needMyApproval.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="my-requests"
-              className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2"
-            >
-              My Requests
-              {myPendingRequests.length > 0 && (
-                <span className="ml-2 bg-blue-500 text-white text-xs rounded-full px-2 py-1">
-                  {myPendingRequests.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="all"
-              className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2"
-            >
-              All Sessions
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Search and Filters */}
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search by name..."
-                  value={filters.search}
-                  onChange={(e) =>
-                    setFilters({ ...filters, search: e.target.value })
-                  }
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
-                />
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setMobileFiltersOpen(true)}
-                className="lg:hidden flex items-center gap-2"
+            <TabsList className="flex w-full max-w-full overflow-x-auto mb-6 bg-white border rounded-lg p-1">
+              <TabsTrigger
+                value="as-teacher"
+                className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
               >
-                <Filter className="w-4 h-4" />
-                Filters
-              </Button>
-            </div>
-
-            {/* Desktop Filters */}
-            <div className="hidden lg:block bg-white p-4 rounded-lg border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Status
-                  </label>
-                  <Select
-                    value={filters.status}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="confirmed">Confirmed</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="canceled">Canceled</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center gap-2 justify-center">
+                  <GraduationCap className="w-4 h-4" />
+                  <span>As Teacher</span>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Request Type
-                  </label>
-                  <Select
-                    value={filters.requestType}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, requestType: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All requests" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Requests</SelectItem>
-                      <SelectItem value="i-requested">I Requested</SelectItem>
-                      <SelectItem value="they-requested">
-                        They Requested
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+              </TabsTrigger>
+              <TabsTrigger
+                value="as-student"
+                className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+              >
+                <div className="flex items-center gap-2 justify-center">
+                  <BookOpen className="w-4 h-4" />
+                  <span>As Student</span>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Date Range
-                  </label>
-                  <Select
-                    value={filters.dateRange}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, dateRange: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All dates" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Dates</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="week">This Week</SelectItem>
-                      <SelectItem value="month">This Month</SelectItem>
-                      <SelectItem value="upcoming">Upcoming</SelectItem>
-                      <SelectItem value="past">Past</SelectItem>
-                    </SelectContent>
-                  </Select>
+              </TabsTrigger>
+              <TabsTrigger
+                value="need-action"
+                className="flex-1 min-w-0 text-xs sm:text-sm px-3 sm:px-6 py-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+              >
+                <div className="flex items-center gap-2 justify-center">
+                  <ClockIcon className="w-4 h-4" />
+                  <span>Need My Action</span>
+                  {needMyAction.length > 0 && (
+                    <Badge className="ml-1 bg-red-500 text-white text-xs rounded-full px-2 py-1">
+                      {needMyAction.length}
+                    </Badge>
+                  )}
                 </div>
+              </TabsTrigger>
+            </TabsList>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Sort By
-                  </label>
-                  <Select
-                    value={filters.sortBy}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, sortBy: value })
+            {/* Search and Filters */}
+            <div className="mb-6">
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    placeholder="Search by session title or course..."
+                    value={filters.search}
+                    onChange={(e) =>
+                      setFilters({ ...filters, search: e.target.value })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sort by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="date-desc">
-                        Date (Newest First)
-                      </SelectItem>
-                      <SelectItem value="date-asc">
-                        Date (Oldest First)
-                      </SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                  />
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tab content */}
-          <TabsContent value="awaiting-action">
-            <div
-              key={pageKey}
-              className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
-            >
-              {renderCards(paginate(filteredNeedMyApproval))}
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredNeedMyApproval.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={(page) => {
-                setCurrentPage(page);
-                setPageKey((prev) => prev + 1);
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="my-requests">
-            <div
-              key={pageKey}
-              className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
-            >
-              {renderCards(paginate(filteredMyPendingRequests))}
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredMyPendingRequests.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={(page) => {
-                setCurrentPage(page);
-                setPageKey((prev) => prev + 1);
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="all">
-            <div
-              key={pageKey}
-              className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
-            >
-              {renderCards(paginate(filteredOtherAppointments))}
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredOtherAppointments.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={(page) => {
-                setCurrentPage(page);
-                setPageKey((prev) => prev + 1);
-              }}
-            />
-          </TabsContent>
-        </Tabs>
-
-        {/* Reschedule Modal */}
-        <Dialog open={openModal} onOpenChange={setOpenModal}>
-          <DialogContent className="w-full max-w-md mx-4">
-            <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">
-                Reschedule Session
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div>
-                <label className="font-medium mb-2 block text-sm sm:text-base">
-                  Select New Date
-                </label>
-                <Calendar
-                  mode="single"
-                  selected={newDate}
-                  onSelect={handleDateSelect}
-                  className="rounded-md border w-full"
-                  disabled={isDateDisabled}
-                />
+                <Button
+                  variant="outline"
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className="lg:hidden flex items-center gap-2"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filters
+                </Button>
               </div>
 
-              {newDate &&
-                (availableTimes.length > 0 ? (
+              {/* Desktop Filters */}
+              <div className="hidden lg:block bg-white p-4 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="font-medium mb-2 block text-sm sm:text-base">
-                      Available Times
+                    <label className="block text-sm font-medium mb-2">
+                      Status
                     </label>
-                    <Select onValueChange={setNewTime} value={newTime}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a time" />
+                    <Select
+                      value={filters.status}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, status: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableTimes.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="canceled">Canceled</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    {selectedAppt?.teacher?.fullName} is not available on this
-                    day.
-                  </p>
-                ))}
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Request Type
+                    </label>
+                    <Select
+                      value={filters.requestType}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, requestType: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All requests" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Requests</SelectItem>
+                        <SelectItem value="i-requested">I Requested</SelectItem>
+                        <SelectItem value="they-requested">
+                          They Requested
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Date Range
+                    </label>
+                    <Select
+                      value={filters.dateRange}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, dateRange: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All dates" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Dates</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">This Week</SelectItem>
+                        <SelectItem value="month">This Month</SelectItem>
+                        <SelectItem value="upcoming">Upcoming</SelectItem>
+                        <SelectItem value="past">Past</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Sort By
+                    </label>
+                    <Select
+                      value={filters.sortBy}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, sortBy: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date-desc">
+                          Date (Newest First)
+                        </SelectItem>
+                        <SelectItem value="date-asc">
+                          Date (Oldest First)
+                        </SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-3 sm:gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setOpenModal(false)}
-                className="w-full sm:w-auto"
+            {/* Tab content */}
+            <TabsContent value="as-teacher">
+              <div
+                key={pageKey}
+                className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRescheduleConfirm}
-                disabled={!newTime || !newDate}
-                className="w-full sm:w-auto"
+                {renderCards(paginate(filteredAsTeacher), "as-teacher")}
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredAsTeacher.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={(page) => {
+                  setCurrentPage(page);
+                  setPageKey((prev) => prev + 1);
+                }}
+              />
+            </TabsContent>
+
+            <TabsContent value="as-student">
+              <div
+                key={pageKey}
+                className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
               >
-                Confirm Reschedule
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                {renderCards(paginate(filteredAsStudent), "as-student")}
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredAsStudent.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={(page) => {
+                  setCurrentPage(page);
+                  setPageKey((prev) => prev + 1);
+                }}
+              />
+            </TabsContent>
 
-        {/* Mobile Filter Drawer */}
-        <MobileFilterDrawer
-          open={mobileFiltersOpen}
-          onClose={() => setMobileFiltersOpen(false)}
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
+            <TabsContent value="need-action">
+              <div
+                key={pageKey}
+                className="transition-all duration-500 ease-in-out transform opacity-0 animate-fadeIn"
+              >
+                {renderCards(paginate(filteredNeedMyAction), "need-action")}
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredNeedMyAction.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={(page) => {
+                  setCurrentPage(page);
+                  setPageKey((prev) => prev + 1);
+                }}
+              />
+            </TabsContent>
+          </Tabs>
 
-        {/* Rating Dialog */}
-        <RatingDialog
-          open={ratingDialogOpen}
-          onOpenChange={setRatingDialogOpen}
-          appointment={selectedApptForRating}
-          onRatingSubmit={handleRatingSubmit}
-          existingRating={existingRatingForAppt}
-        />
+          {/* Reschedule Modal */}
+          <Dialog open={openModal} onOpenChange={setOpenModal}>
+            <DialogContent className="w-full max-w-md mx-4 rounded-lg">
+              <DialogHeader>
+                <DialogTitle className="text-lg sm:text-xl flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5" />
+                  Reschedule Session
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="font-medium mb-2 block text-sm sm:text-base">
+                    Select New Date
+                  </label>
+                  <Calendar
+                    mode="single"
+                    selected={newDate}
+                    onSelect={handleDateSelect}
+                    className="rounded-md border w-full"
+                    disabled={isDateDisabled}
+                  />
+                  {selectedAppt && courses[selectedAppt.courseId]?.endDate && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Available until:{" "}
+                      {formatLocalDate(courses[selectedAppt.courseId].endDate)}
+                    </p>
+                  )}
+                </div>
+
+                {newDate &&
+                  (availableTimes.length > 0 ? (
+                    <div>
+                      <label className="font-medium mb-2 block text-sm sm:text-base">
+                        Available Times
+                      </label>
+                      <Select onValueChange={setNewTime} value={newTime}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTimes.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      {selectedAppt?.teacher?.fullName} is not available on this
+                      day.
+                    </p>
+                  ))}
+              </div>
+
+              <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-3 sm:gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setOpenModal(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRescheduleConfirm}
+                  disabled={!newTime || !newDate}
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                >
+                  Confirm Reschedule
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Mobile Filter Drawer */}
+          <MobileFilterDrawer
+            open={mobileFiltersOpen}
+            onClose={() => setMobileFiltersOpen(false)}
+            filters={filters}
+            onFiltersChange={setFilters}
+          />
+
+          {/* Rating Dialog */}
+          <RatingDialog
+            open={ratingDialogOpen}
+            onOpenChange={setRatingDialogOpen}
+            appointment={selectedApptForRating}
+            onRatingSubmit={handleRatingSubmit}
+            existingRating={existingRatingForAppt}
+          />
+        </div>
       </div>
     </>
   );
