@@ -22,6 +22,7 @@ import SessionTab from "./SessionTab";
 import ReviewsManagement from "./Reviews";
 import CoursePage from "./CoursePage";
 import CourseManagementPage from "./Courses";
+import LandingPage from "./LandingPage";
 
 export default function App() {
   return (
@@ -36,6 +37,8 @@ export default function App() {
       />
 
       <Routes>
+        <Route path="/" element={<LandingPage />} />
+
         <Route element={<PrivateRoute requireVerified={true} />}>
           <Route element={<MainLayout />}>
             <Route path="/sessions" element={<SessionTab />} />

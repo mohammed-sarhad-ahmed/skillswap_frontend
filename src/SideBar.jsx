@@ -10,6 +10,7 @@ import {
   Search,
   StarIcon,
   BookOpen,
+  HomeIcon,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -33,6 +34,7 @@ import io from "socket.io-client";
 const socket = io(API_BASE_URL);
 
 const navItems = [
+  { title: "Home", to: "/", icon: HomeIcon },
   { title: "Sessions", to: "/sessions", icon: ClipboardList },
   { title: "Appointments", to: "/appointments", icon: Calendar },
   { title: "Find Teacher", to: "/skills", icon: Search },

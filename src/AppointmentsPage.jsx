@@ -254,6 +254,7 @@ function MobileFilterDrawer({ open, onClose, filters, onFiltersChange }) {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="ongoing">Ongoing</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="canceled">Canceled</SelectItem>
               </SelectContent>
@@ -384,6 +385,18 @@ export default function AppointmentsPage() {
   // Mobile states
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
+  // Reset filters when tab changes
+  useEffect(() => {
+    setFilters({
+      status: "all",
+      requestType: "all",
+      dateRange: "all",
+      sortBy: "date-desc",
+      search: "",
+    });
+    setCurrentPage(1);
+  }, [activeTab]);
+
   // Fetch course information with full details including end date
   const fetchCoursesForAppointments = async (appointmentsList) => {
     const courseIds = [
@@ -496,7 +509,7 @@ export default function AppointmentsPage() {
     fetchRatings();
   }, []);
 
-  // Filter and sort appointments
+  // Filter and sort appointments - FIXED VERSION with ongoing status
   const getFilteredAppointments = (appointmentsList) => {
     let filtered = appointmentsList.filter((appt) => {
       // Status filter
@@ -512,30 +525,51 @@ export default function AppointmentsPage() {
           return false;
       }
 
-      // Date range filter
-      const apptDate = new Date(`${appt.date}T${appt.time}`);
+      // Date range filter - FIXED
+      const apptDateTime = new Date(`${appt.date}T${appt.time}`);
       const now = new Date();
+
+      // Create dates without time for proper comparison
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(today);
-      weekAgo.setDate(today.getDate() - 7);
-      const monthAgo = new Date(today);
-      monthAgo.setMonth(today.getMonth() - 1);
+      const apptDateOnly = new Date(
+        apptDateTime.getFullYear(),
+        apptDateTime.getMonth(),
+        apptDateTime.getDate()
+      );
+
+      // Calculate date ranges
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday of this week
+
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Saturday of this week
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
 
       switch (filters.dateRange) {
         case "today":
-          if (apptDate.toDateString() !== today.toDateString()) return false;
+          if (apptDateOnly.getTime() !== today.getTime()) return false;
           break;
         case "week":
-          if (apptDate < weekAgo) return false;
+          if (apptDateOnly < startOfWeek || apptDateOnly > endOfWeek)
+            return false;
           break;
         case "month":
-          if (apptDate < monthAgo) return false;
+          if (apptDateOnly < startOfMonth || apptDateOnly > endOfMonth)
+            return false;
           break;
         case "upcoming":
-          if (apptDate < now) return false;
+          if (apptDateTime <= now) return false;
           break;
         case "past":
-          if (apptDate >= now) return false;
+          if (apptDateTime >= now) return false;
+          break;
+        case "all":
+        default:
+          // No filtering for "all"
           break;
       }
 
@@ -544,9 +578,10 @@ export default function AppointmentsPage() {
         const searchTerm = filters.search.toLowerCase();
         const course = courses[appt.courseId];
         const courseName = course?.title || "";
+        const sessionTitle = appt.title || "";
 
         if (
-          !appt.title?.toLowerCase().includes(searchTerm) &&
+          !sessionTitle.toLowerCase().includes(searchTerm) &&
           !courseName.toLowerCase().includes(searchTerm)
         ) {
           return false;
@@ -556,25 +591,27 @@ export default function AppointmentsPage() {
       return true;
     });
 
-    // Sort
+    // Sort - FIXED with proper status order including ongoing
     filtered.sort((a, b) => {
       const dateA = new Date(`${a.date}T${a.time}`);
       const dateB = new Date(`${b.date}T${b.time}`);
 
       switch (filters.sortBy) {
         case "date-asc":
-          return dateA - dateB;
+          return dateA - dateB; // Oldest first
+        case "date-desc":
+          return dateB - dateA; // Newest first
         case "status":
           const statusOrder = {
             pending: 1,
             confirmed: 2,
-            completed: 3,
-            canceled: 4,
+            ongoing: 3,
+            completed: 4,
+            canceled: 5,
           };
           return statusOrder[a.status] - statusOrder[b.status];
-        case "date-desc":
         default:
-          return dateB - dateA;
+          return dateB - dateA; // Default to newest first
       }
     });
 
@@ -819,6 +856,44 @@ export default function AppointmentsPage() {
     }
   };
 
+  // Get badge color for status - UPDATED with ongoing
+  const getStatusBadgeColor = (status) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-500";
+      case "confirmed":
+        return "bg-green-500";
+      case "ongoing":
+        return "bg-blue-500";
+      case "completed":
+        return "bg-purple-500";
+      case "canceled":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  // Get border color for card - UPDATED with ongoing
+  const getCardBorderColor = (status, needsMyApproval) => {
+    if (needsMyApproval) return "border-yellow-400 border-2";
+
+    switch (status) {
+      case "pending":
+        return "border-yellow-200";
+      case "confirmed":
+        return "border-green-200";
+      case "ongoing":
+        return "border-blue-200";
+      case "completed":
+        return "border-purple-200";
+      case "canceled":
+        return "border-red-200";
+      default:
+        return "border-gray-200";
+    }
+  };
+
   const renderCards = (list, context) =>
     list.length === 0 ? (
       <div className="text-center py-12">
@@ -862,23 +937,17 @@ export default function AppointmentsPage() {
           const needsMyApproval = appt.status === "pending" && !iRequested;
           const waitingTheirApproval = appt.status === "pending" && iRequested;
 
-          // Both users can reschedule confirmed appointments
-          const canReschedule = appt.status === "confirmed";
+          // Both users can reschedule confirmed or ongoing appointments
+          const canReschedule =
+            appt.status === "confirmed" || appt.status === "ongoing";
 
           return (
             <Card
               key={appt._id}
-              className={`flex flex-col justify-between h-full p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 bg-white border ${
+              className={`flex flex-col justify-between h-full p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 bg-white border ${getCardBorderColor(
+                appt.status,
                 needsMyApproval
-                  ? "border-yellow-400 border-2"
-                  : appt.status === "completed"
-                  ? "border-green-200"
-                  : appt.status === "confirmed"
-                  ? "border-blue-200"
-                  : appt.status === "canceled"
-                  ? "border-red-200"
-                  : "border-gray-200"
-              } hover:border-blue-300`}
+              )} hover:border-blue-300`}
             >
               <div className="flex-1">
                 {/* Session Header with Title and Course */}
@@ -962,17 +1031,9 @@ export default function AppointmentsPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Status: </span>
                     <Badge
-                      className={`
-                        ${
-                          appt.status === "pending"
-                            ? "bg-yellow-500"
-                            : appt.status === "confirmed"
-                            ? "bg-green-500"
-                            : appt.status === "completed"
-                            ? "bg-blue-500"
-                            : "bg-red-500"
-                        } text-white
-                      `}
+                      className={`${getStatusBadgeColor(
+                        appt.status
+                      )} text-white`}
                     >
                       {appt.status.toUpperCase()}
                     </Badge>
@@ -1028,8 +1089,8 @@ export default function AppointmentsPage() {
                   </div>
                 )}
 
-                {/* Case 3: Confirmed appointments - BOTH USERS CAN RESCHEDULE */}
-                {appt.status === "confirmed" && (
+                {/* Case 3: Confirmed or ongoing appointments - BOTH USERS CAN RESCHEDULE */}
+                {(appt.status === "confirmed" || appt.status === "ongoing") && (
                   <>
                     <Button
                       variant="outline"
@@ -1199,6 +1260,22 @@ export default function AppointmentsPage() {
                   <Filter className="w-4 h-4" />
                   Filters
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFilters({
+                      status: "all",
+                      requestType: "all",
+                      dateRange: "all",
+                      sortBy: "date-desc",
+                      search: "",
+                    });
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset Filters
+                </Button>
               </div>
 
               {/* Desktop Filters */}
@@ -1221,6 +1298,7 @@ export default function AppointmentsPage() {
                         <SelectItem value="all">All Statuses</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="ongoing">Ongoing</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
                         <SelectItem value="canceled">Canceled</SelectItem>
                       </SelectContent>
