@@ -9,6 +9,7 @@ import {
   X,
   Star,
   Users,
+  Upload,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { API_BASE_URL } from "./Config";
@@ -25,7 +26,9 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [connectionState, setConnectionState] = useState("connect");
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportReason, setReportReason] = useState("");
+  const [reportTitle, setReportTitle] = useState(""); // Changed from reportReason
+  const [reportReason, setReportReason] = useState(""); // This is the detailed reason
+  const [reportProof, setReportProof] = useState(null);
   const [showUnconnectModal, setShowUnconnectModal] = useState(false);
   const [ratings, setRatings] = useState([]);
   const [ratingFilter, setRatingFilter] = useState(0);
@@ -76,7 +79,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
       const data = await res.json();
 
       if (data.status.toLowerCase() === "success") {
-        // Handle both array and object formats
         const ratingsData = Array.isArray(data.data)
           ? data.data
           : data.data.ratings || [];
@@ -89,14 +91,12 @@ export default function ProfileInfo({ isSidebarOpen }) {
     }
   };
 
-  // Fetch profile user, rating stats, and ratings
   useEffect(() => {
     fetchUser();
     fetchRatingStats();
     fetchRatings();
   }, [id]);
 
-  // Fetch current logged-in user
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -131,7 +131,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
     fetchCurrentUser();
   }, [id]);
 
-  // Socket events
   useEffect(() => {
     socket.on("connection_request", ({ from }) => {
       if (from === id) setConnectionState("accept");
@@ -141,7 +140,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
         if (status === "accepted") setConnectionState("connected");
         if (status === "cancelled") setConnectionState("connect");
         if (status === "rejected") setConnectionState("connect");
-        fetchUser(); // 👈 REFRESH connection count in realtime
+        fetchUser();
       }
     });
     return () => {
@@ -168,7 +167,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
       setConnectionState("connect");
       toast.success("Connection cancelled");
     } else if (connectionState === "connected") {
-      // 👇 Show confirmation modal instead of directly unconnecting
       setShowUnconnectModal(true);
     } else if (connectionState === "accept") {
       socket.emit("accept_connection_request", {
@@ -190,34 +188,63 @@ export default function ProfileInfo({ isSidebarOpen }) {
     setShowUnconnectModal(false);
   };
 
+  // ===========================
+  // REPORT SUBMISSION HANDLER
+  // ===========================
   const handleReportSubmit = async () => {
-    if (!reportReason) {
-      toast.error("Please select a reason");
+    // Validate title
+    if (!reportTitle) {
+      toast.error("Please select a report category");
       return;
     }
+
+    // Validate reason (minlength 5)
+    if (!reportReason || reportReason.trim().length < 5) {
+      toast.error("Please provide a detailed reason (at least 5 characters)");
+      return;
+    }
+
+    // Validate proof
+    if (!reportProof) {
+      toast.error("Please upload proof image");
+      return;
+    }
+
     try {
+      const formData = new FormData();
+      formData.append("reportedUser", user._id);
+      formData.append("title", reportTitle); // This is the enum value
+      formData.append("reason", reportReason.trim()); // This is the detailed description
+      formData.append("proof", reportProof);
+
       const res = await fetch(`${API_BASE_URL}/report`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           auth: getToken(),
         },
-        body: JSON.stringify({ reportedUser: user._id, reason: reportReason }),
+        body: formData,
       });
+
       const data = await res.json();
+
       if (res.ok && data.status.toLowerCase() === "success") {
-        toast.success("User reported successfully!");
+        toast.success(
+          "Report submitted successfully! Our team will review it."
+        );
+        setShowReportModal(false);
+        setReportTitle("");
+        setReportReason("");
+        setReportProof(null);
       } else {
-        toast.error(data.message || "Failed to report user");
+        const errorMessage = data.message || "Failed to submit report";
+        toast.error(errorMessage);
       }
-      setShowReportModal(false);
-      setReportReason("");
-    } catch {
-      toast.error("Something went wrong while reporting.");
+    } catch (error) {
+      console.error("Report submission error:", error);
+      toast.error("Something went wrong while submitting the report.");
     }
   };
 
-  // Function to render star rating
   const renderStars = (rating, size = "text-base") => {
     const stars = [];
     const fullStars = Math.floor(rating);
@@ -248,7 +275,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
     return <div className="flex items-center gap-1">{stars}</div>;
   };
 
-  // Rating distribution for filter buttons
   const ratingOptions = [
     { value: 0, label: "All Ratings", count: ratingStats.totalRatings },
     { value: 5, label: "5 Stars", count: ratingStats.ratingDistribution[5] },
@@ -258,7 +284,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
     { value: 1, label: "1 Star", count: ratingStats.ratingDistribution[1] },
   ];
 
-  // Filter ratings based on selected rating
   const filteredRatings =
     ratingFilter === 0
       ? ratings
@@ -313,9 +338,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
           <span>{user.email}</span>
         </div>
 
-        {/* Connections and Rating Stats - Now at same level */}
         <div className="flex flex-wrap justify-center gap-8 mt-4">
-          {/* Connections Count */}
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-2 text-gray-700">
               <Users className="w-5 h-5" />
@@ -326,7 +349,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
             <p className="text-sm text-gray-500 mt-1">Connections</p>
           </div>
 
-          {/* Average Rating */}
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-2">
               {renderStars(ratingStats.averageRating, "text-lg")}
@@ -382,7 +404,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
             </Button>
           )}
 
-          {/* Message */}
           <Button
             onClick={() => navigate(`/chat/${user._id}`)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-full shadow-sm"
@@ -391,7 +412,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
             Message
           </Button>
 
-          {/* Report */}
+          {/* Report Button */}
           <Button
             onClick={() => setShowReportModal(true)}
             className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full shadow-sm"
@@ -402,7 +423,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
       </div>
 
-      {/* ✅ Unconnect Confirmation Modal */}
+      {/* Unconnect Confirmation Modal */}
       {showUnconnectModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg relative text-center">
@@ -431,48 +452,158 @@ export default function ProfileInfo({ isSidebarOpen }) {
         </div>
       )}
 
-      {/* Report Modal */}
+      {/* =========================== */}
+      {/* REPORT MODAL - FIXED */}
+      {/* =========================== */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-lg relative">
+          <div
+            className="bg-white rounded-xl p-6 w-96 max-h-[90vh] overflow-y-auto shadow-lg relative"
+            onClick={(e) => e.stopPropagation()} // Prevent click propagation
+          >
             <button
-              onClick={() => setShowReportModal(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              onClick={() => {
+                setShowReportModal(false);
+                setReportTitle("");
+                setReportReason("");
+                setReportProof(null);
+              }}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"
             >
               <X className="w-5 h-5" />
             </button>
+
             <h2 className="text-xl font-semibold text-gray-800 mb-4">
               Report {user.fullName}
             </h2>
             <p className="text-sm text-gray-600 mb-3">
-              Select a reason for reporting:
+              Please provide evidence for your report:
             </p>
 
-            <select
-              value={reportReason}
-              onChange={(e) => setReportReason(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-red-500 focus:outline-none"
-            >
-              <option value="">-- Choose a reason --</option>
-              <option value="spam">Spam or scam</option>
-              <option value="harassment">Harassment or bullying</option>
-              <option value="inappropriate">Inappropriate content</option>
-              <option value="fake">Fake account</option>
-              <option value="other">Other</option>
-            </select>
+            {/* Report Title Selection (enum) */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Report Category *
+              </label>
+              <select
+                value={reportTitle}
+                onChange={(e) => setReportTitle(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                required
+              >
+                <option value="">-- Choose a category --</option>
+                <option value="spam">Spam or scam</option>
+                <option value="harassment">Harassment or bullying</option>
+                <option value="inappropriate">Inappropriate content</option>
+                <option value="fake">Fake account</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
 
-            {/* 👇 Show text area if "Other" is selected */}
-            {reportReason === "other" && (
+            {/* Detailed Reason (always required) */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Detailed Reason *
+                <span className="text-red-500 ml-1">
+                  (Minimum 5 characters)
+                </span>
+              </label>
               <textarea
-                placeholder="Please describe the issue..."
+                placeholder="Please provide a detailed description of the issue..."
+                value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                rows="4"
+                required
               />
-            )}
+              <div className="text-xs text-gray-500 mt-1">
+                Characters: {reportReason.length}/5 minimum
+                {reportReason.length < 5 && (
+                  <span className="text-red-500 ml-2">
+                    (More characters needed)
+                  </span>
+                )}
+              </div>
+            </div>
 
+            {/* Proof Upload - REQUIRED */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Proof *
+                <span className="text-red-500 ml-1">(Required)</span>
+              </label>
+
+              {/* File Upload Area - Fixed with separate button */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                  reportProof
+                    ? "border-green-500 bg-green-50"
+                    : "border-gray-300 bg-gray-50"
+                }`}
+              >
+                {reportProof ? (
+                  <div className="flex flex-col items-center">
+                    <Upload className="w-8 h-8 text-green-500 mb-2" />
+                    <p className="text-sm font-medium text-green-700">
+                      File selected: {reportProof.name}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-2 text-xs"
+                      onClick={() =>
+                        document.getElementById("proof-upload").click()
+                      }
+                    >
+                      Change File
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      No file selected
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() =>
+                        document.getElementById("proof-upload").click()
+                      }
+                    >
+                      Select Proof Image
+                    </Button>
+                  </div>
+                )}
+                <input
+                  id="proof-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setReportProof(e.target.files[0])}
+                  className="hidden"
+                  required
+                />
+              </div>
+
+              {/* File Requirements */}
+              <div className="mt-2 text-xs text-gray-500">
+                <p>• Proof is required for all reports</p>
+                <p>• Upload screenshots or images as evidence</p>
+                <p>• Supported formats: JPG, PNG, GIF, WEBP</p>
+                <p>• Maximum file size: 5MB</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
             <div className="flex justify-end gap-2">
               <Button
-                onClick={() => setShowReportModal(false)}
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportTitle("");
+                  setReportReason("");
+                  setReportProof(null);
+                }}
                 variant="outline"
                 className="px-4 py-2 rounded-lg"
               >
@@ -480,16 +611,19 @@ export default function ProfileInfo({ isSidebarOpen }) {
               </Button>
               <Button
                 onClick={handleReportSubmit}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                disabled={
+                  !reportTitle || !reportProof || reportReason.trim().length < 5
+                }
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                Submit
+                Submit Report
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Info sections */}
+      {/* Rest of the profile sections */}
       <div className="max-w-5xl mx-auto mt-12 px-4 space-y-10">
         {user.availability && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -591,7 +725,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
             Ratings & Reviews
           </h2>
 
-          {/* Rating Filter Buttons */}
           <div className="flex flex-wrap gap-2 mb-6">
             {ratingOptions.map((option) => (
               <button
@@ -619,7 +752,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
             ))}
           </div>
 
-          {/* Ratings List */}
           <div className="space-y-4">
             {filteredRatings.length > 0 ? (
               filteredRatings.map((rating, index) => (
@@ -655,7 +787,6 @@ export default function ProfileInfo({ isSidebarOpen }) {
                     </p>
                   )}
 
-                  {/* ADDED: Reply Display */}
                   {rating.reply && (
                     <div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-200">
                       <div className="flex items-center gap-2 mb-2">
