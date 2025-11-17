@@ -278,7 +278,6 @@ export default function ProfilePage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-        <Toaster position="top-center" />
       </div>
     );
 
@@ -286,14 +285,11 @@ export default function ProfilePage() {
     return (
       <div className="text-center mt-20 text-red-500">
         Failed to load profile.
-        <Toaster position="top-center" />
       </div>
     );
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Toaster position="top-center" />
-
       {/* Tabs and Credits */}
       <div className="bg-white border-b shadow-sm px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="flex justify-between w-full sm:w-auto gap-2">

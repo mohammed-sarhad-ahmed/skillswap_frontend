@@ -5,6 +5,14 @@ export const getToken = () => {
   return localStorage.getItem("authToken");
 };
 
+export const getAdminToken = () => {
+  return localStorage.getItem("admin_token");
+};
+
+export const removeAdminToken = () => {
+  return localStorage.removeItem("admin_token");
+};
+
 export const removeToken = () => {
   localStorage.removeItem("authToken");
 };

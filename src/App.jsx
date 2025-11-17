@@ -25,6 +25,7 @@ import CourseManagementPage from "./Courses";
 import LandingPage from "./LandingPage";
 import AdminLogin from "./AdminLogin";
 import AdminDashboard from "./AdminDashboard";
+import AdminPrivateRoute from "./PrivateAdmin";
 
 export default function App() {
   return (
@@ -71,7 +72,6 @@ export default function App() {
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/Admin-login" element={<AdminLogin />} />
-          <Route path="/Admin-dashboard" element={<AdminDashboard />} />
 
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -79,6 +79,10 @@ export default function App() {
             path="/reset-password/:token"
             element={<ResetPasswordPage />}
           />
+        </Route>
+
+        <Route element={<AdminPrivateRoute />}>
+          <Route path="/Admin-dashboard" element={<AdminDashboard />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

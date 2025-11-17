@@ -28,7 +28,11 @@ export default function PrivateRoute({ requireVerified = true }) {
 
         const data = await res.json();
 
-        if ([401, 403, 404].includes(res.status)) {
+        if (
+          [401, 403, 404].includes(res.status) ||
+          data.message ===
+            "The user belong to this is banned contact us if you think we are wrong"
+        ) {
           toast.error(
             data.message || "Your session has expired. Please log in again.",
             { duration: 4000 }

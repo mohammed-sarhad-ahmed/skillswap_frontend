@@ -27,7 +27,7 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/login`, {
+      const res = await fetch(`${API_BASE_URL}/admin/admin-login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,8 +40,8 @@ export default function AdminLogin() {
       if (!res.ok) {
         throw new Error(data.message || "Login failed");
       }
-
-      if (!data.success) {
+      console.log();
+      if (data.status.toLowerCase() !== "success") {
         throw new Error(data.message || "Login failed");
       }
 
@@ -52,7 +52,7 @@ export default function AdminLogin() {
       }
 
       toast.success("Welcome back, Admin!");
-      navigate("/admin/dashboard", { replace: true });
+      navigate("/admin-dashboard", { replace: true });
     } catch (err) {
       toast.error(err.message || "Invalid credentials");
     } finally {
