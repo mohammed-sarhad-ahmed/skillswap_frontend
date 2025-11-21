@@ -11,6 +11,7 @@ import {
   StarIcon,
   BookOpen,
   HomeIcon,
+  Shield,
 } from "lucide-react";
 import { API_BASE_URL } from "./Config";
 
@@ -43,6 +44,7 @@ const navItems = [
   { title: "Connections", to: "/ConnectionPage", icon: User },
   { title: "Reviews", to: "/reviews", icon: StarIcon },
   { title: "Courses", to: "/courses", icon: BookOpen },
+  { title: "Defense", to: "/Defense", icon: Shield },
 ];
 
 export default function AppSidebar() {
