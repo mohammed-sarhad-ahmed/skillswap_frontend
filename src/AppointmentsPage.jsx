@@ -365,28 +365,38 @@ const formatLocalDate = (dateString) => {
 // Helper function to parse appointment date and time properly with timezone fix
 const parseAppointmentDateTime = (appt) => {
   try {
-    // Use the full ISO string from the database to preserve timezone information
-    const dateOnly = appt.date.split("T")[0];
-    const dateTimeString = `${dateOnly}T${appt.time}`;
+    // Create a Date object from the original DB date (keeps timezone correctly)
+    const original = new Date(appt.date);
 
-    // Create date object - this will be in local timezone
-    const dateTime = new Date(dateTimeString);
+    // Clone it so we don't mutate original
+    const dateTime = new Date(original);
+
+    // Split hours and minutes from "HH:mm"
+    const [hours, minutes] = appt.time.split(":").map(Number);
+
+    // Apply local time correctly
+    dateTime.setHours(hours, minutes, 0, 0);
 
     if (isNaN(dateTime.getTime())) {
-      console.warn(
-        "Invalid date for appointment:",
-        appt._id,
-        appt.date,
-        appt.time
-      );
+      console.warn("Invalid date/time for appointment:", appt);
       return null;
     }
 
     return dateTime;
-  } catch (error) {
-    console.error("Error parsing appointment date:", error);
+  } catch (err) {
+    console.error("Error parsing appointment date:", err);
     return null;
   }
+};
+
+// Helper function to calculate course end date from start date and duration
+const calculateCourseEndDate = (course) => {
+  if (!course?.startDate || !course?.duration) return null;
+
+  const startDate = new Date(course.startDate);
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + course.duration * 7); // duration in weeks * 7 days
+  return endDate;
 };
 
 export default function AppointmentsPage() {
@@ -455,11 +465,12 @@ export default function AppointmentsPage() {
             coursesMap[courseId] = data.data.course;
           } else {
             console.warn(`Failed to fetch course ${courseId}`);
-            // Create a fallback course object with the ID as title
+            // Create a fallback course object
             coursesMap[courseId] = {
               title: `Course ${courseId.substring(0, 8)}...`,
               _id: courseId,
-              endDate: null,
+              startDate: null,
+              duration: null,
             };
           }
         } catch (err) {
@@ -468,7 +479,8 @@ export default function AppointmentsPage() {
           coursesMap[courseId] = {
             title: `Course ${courseId.substring(0, 8)}...`,
             _id: courseId,
-            endDate: null,
+            startDate: null,
+            duration: null,
           };
         }
       })
@@ -771,26 +783,54 @@ export default function AppointmentsPage() {
   const getWeekday = (date) =>
     date.toLocaleDateString("en-US", { weekday: "long" });
 
+  // UPDATED: Generate 1-hour time slots
   const generateTimeSlots = (start, end) => {
     const times = [];
     let [h, m] = start.split(":").map(Number);
     let [endH, endM] = end.split(":").map(Number);
+
     while (h < endH || (h === endH && m < endM)) {
       const hh = String(h).padStart(2, "0");
       const mm = String(m).padStart(2, "0");
       times.push(`${hh}:${mm}`);
-      m += 30;
-      if (m >= 60) {
-        h++;
-        m -= 60;
-      }
+      h += 1; // Increment by 1 hour
     }
+
     return times;
   };
 
-  // Check if date is within course duration and teacher availability
+  // FIXED: Fetch only the other person's availability for rescheduling
+  const fetchOtherUserAvailability = async (appt) => {
+    try {
+      const iAmTeacher = appt.teacher._id === userId;
+      const otherUserId = iAmTeacher ? appt.student._id : appt.teacher._id;
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/user/${otherUserId}/availability`,
+        {
+          headers: { auth: getToken() },
+        }
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch availability data");
+      }
+
+      return {
+        user: data.data.user,
+        isTeacher: iAmTeacher,
+      };
+    } catch (err) {
+      console.error("Error fetching availability:", err);
+      toast.error("Failed to load availability data");
+      return null;
+    }
+  };
+
+  // FIXED: Enhanced date disabling logic for rescheduling - only check other person's availability
   const isDateDisabled = (date) => {
-    if (!selectedAppt || !selectedAppt.teacher.availability) return true;
+    if (!selectedAppt) return true;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -798,42 +838,57 @@ export default function AppointmentsPage() {
     // Disable past dates
     if (date < today) return true;
 
-    // Check if date is within course duration
+    // Check if date is within course duration - Calculate end date from startDate + duration
     const course = courses[selectedAppt.courseId];
-    if (course && course.endDate) {
-      const courseEndDate = new Date(course.endDate);
-      courseEndDate.setHours(23, 59, 59, 999); // End of the last day
-      if (date > courseEndDate) return true;
+    if (course && course.startDate && course.duration) {
+      const courseEndDate = calculateCourseEndDate(course);
+      if (courseEndDate) {
+        courseEndDate.setHours(23, 59, 59, 999);
+        if (date > courseEndDate) return true;
+      }
     }
 
-    // Check teacher availability
+    // Check only the other person's availability
     const weekday = getWeekday(date);
-    const dayData = selectedAppt.teacher.availability[weekday];
-    return !dayData || dayData.off;
+    const otherPersonDayData = selectedAppt.otherUser?.availability?.[weekday];
+
+    if (!otherPersonDayData || otherPersonDayData.off) return true;
+
+    return false;
   };
 
-  const handleDateSelect = (date) => {
+  // FIXED: Handle date selection with only other person's availability
+  const handleDateSelect = async (date) => {
     if (isDateDisabled(date)) return;
     setNewDate(date);
 
     const weekday = getWeekday(date);
-    const dayData = selectedAppt.teacher.availability[weekday];
-    if (!dayData || dayData.off) {
+
+    // Get other person's availability
+    const otherPersonDayData = selectedAppt.otherUser?.availability?.[weekday];
+    if (!otherPersonDayData || otherPersonDayData.off) {
       setAvailableTimes([]);
       return;
     }
 
-    let times = generateTimeSlots(dayData.start, dayData.end);
+    // Generate time slots for the other person only
+    const times = generateTimeSlots(
+      otherPersonDayData.start,
+      otherPersonDayData.end
+    );
 
+    // Filter out past times for today
     const now = new Date();
+    let availableTimes = times;
+
     if (date.toDateString() === now.toDateString()) {
       const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-        Math.floor(now.getMinutes() / 30) * 30
+        now.getMinutes()
       ).padStart(2, "0")}`;
-      times = times.filter((t) => t > currentTime);
+      availableTimes = times.filter((t) => t > currentTime);
     }
 
-    setAvailableTimes(times);
+    setAvailableTimes(availableTimes);
   };
 
   const handleConfirm = async (id) => {
@@ -868,11 +923,27 @@ export default function AppointmentsPage() {
     }
   };
 
-  const handleRescheduleClick = (appt) => {
+  // FIXED: Handle reschedule click - fetch only other person's data
+  const handleRescheduleClick = async (appt) => {
     setSelectedAppt(appt);
     setNewDate(null);
     setNewTime(appt.time);
     setAvailableTimes([]);
+
+    // Fetch only the other person's availability
+    const availabilityData = await fetchOtherUserAvailability(appt);
+    if (availabilityData) {
+      setSelectedAppt({
+        ...appt,
+        otherUser: {
+          ...availabilityData.user,
+          role: availabilityData.isTeacher ? "student" : "teacher",
+        },
+      });
+    } else {
+      setSelectedAppt(appt);
+    }
+
     setOpenModal(true);
   };
 
@@ -884,12 +955,14 @@ export default function AppointmentsPage() {
 
     // Additional validation to ensure the selected date is within course duration
     const course = courses[selectedAppt.courseId];
-    if (course && course.endDate) {
-      const courseEndDate = new Date(course.endDate);
-      courseEndDate.setHours(23, 59, 59, 999);
-      if (newDate > courseEndDate) {
-        toast.error("Cannot reschedule beyond the course end date");
-        return;
+    if (course && course.startDate && course.duration) {
+      const courseEndDate = calculateCourseEndDate(course);
+      if (courseEndDate) {
+        courseEndDate.setHours(23, 59, 59, 999);
+        if (newDate > courseEndDate) {
+          toast.error("Cannot reschedule beyond the course end date");
+          return;
+        }
       }
     }
 
@@ -1527,19 +1600,34 @@ export default function AppointmentsPage() {
                     className="rounded-md border w-full"
                     disabled={isDateDisabled}
                   />
-                  {selectedAppt && courses[selectedAppt.courseId]?.endDate && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Available until:{" "}
-                      {formatLocalDate(courses[selectedAppt.courseId].endDate)}
-                    </p>
-                  )}
+                  {selectedAppt &&
+                    courses[selectedAppt.courseId]?.startDate &&
+                    courses[selectedAppt.courseId]?.duration && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Course duration:{" "}
+                        {courses[selectedAppt.courseId].duration} weeks
+                        {calculateCourseEndDate(
+                          courses[selectedAppt.courseId]
+                        ) && (
+                          <>
+                            {" "}
+                            • Available until:{" "}
+                            {formatLocalDate(
+                              calculateCourseEndDate(
+                                courses[selectedAppt.courseId]
+                              )
+                            )}
+                          </>
+                        )}
+                      </p>
+                    )}
                 </div>
 
                 {newDate &&
                   (availableTimes.length > 0 ? (
                     <div>
                       <label className="font-medium mb-2 block text-sm sm:text-base">
-                        Available Times
+                        Available Times (1-hour slots)
                       </label>
                       <Select onValueChange={setNewTime} value={newTime}>
                         <SelectTrigger className="w-full">
@@ -1553,11 +1641,17 @@ export default function AppointmentsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Showing times when{" "}
+                        {selectedAppt?.otherUser?.role === "teacher"
+                          ? "the teacher"
+                          : "the student"}{" "}
+                        is available
+                      </p>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500 italic">
-                      {selectedAppt?.teacher?.fullName} is not available on this
-                      day.
+                      No available times found for this day.
                     </p>
                   ))}
               </div>
