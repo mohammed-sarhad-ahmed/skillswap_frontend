@@ -85,23 +85,17 @@ function StarRating({ rating, onRatingChange, editable = false, size = "md" }) {
 }
 
 // Rating Dialog Component
-function RatingDialog({
-  open,
-  onOpenChange,
-  appointment,
-  onRatingSubmit,
-  existingRating,
-}) {
-  const [rating, setRating] = useState(existingRating?.rating || 0);
-  const [review, setReview] = useState(existingRating?.review || "");
+function RatingDialog({ open, onOpenChange, appointment, onRatingSubmit }) {
+  const [rating, setRating] = useState(0);
+  const [review, setReview] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setRating(existingRating?.rating || 0);
-      setReview(existingRating?.review || "");
+      setRating(0);
+      setReview("");
     }
-  }, [open, existingRating]);
+  }, [open]);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -118,15 +112,13 @@ function RatingDialog({
     }
   };
 
-  const isEditing = !!existingRating;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md mx-4 rounded-lg">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl flex items-center gap-2">
             <Star className="w-5 h-5 text-yellow-500" />
-            {isEditing ? "Edit Your Review" : "Rate Your Session"}
+            Rate Your Session
           </DialogTitle>
         </DialogHeader>
 
@@ -174,10 +166,8 @@ function RatingDialog({
             {submitting ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {isEditing ? "Updating..." : "Submitting..."}
+                Submitting...
               </div>
-            ) : isEditing ? (
-              "Update Review"
             ) : (
               "Submit Review"
             )}
@@ -416,7 +406,6 @@ export default function AppointmentsPage() {
   // Rating states
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [selectedApptForRating, setSelectedApptForRating] = useState(null);
-  const [existingRatingForAppt, setExistingRatingForAppt] = useState(null);
 
   // Pagination
   const itemsPerPage = 6;
@@ -547,11 +536,24 @@ export default function AppointmentsPage() {
         headers: { auth: getToken() },
       });
       const data = await res.json();
+      console.log("Fetched ratings data:", data);
+
       if (res.ok && data.status.toLowerCase() === "success") {
         const ratingsMap = {};
         data.data.ratings?.forEach((rating) => {
-          ratingsMap[rating.session] = rating;
+          console.log("Rating found:", rating);
+
+          // FIXED: Properly extract session ID from session object
+          const sessionId = rating.session?._id || rating.session;
+          console.log("Session ID for rating:", sessionId);
+
+          if (sessionId) {
+            ratingsMap[sessionId] = rating;
+          } else {
+            console.warn("Rating has no valid session ID:", rating);
+          }
         });
+        console.log("Ratings map created:", ratingsMap);
         setRatings(ratingsMap);
       }
     } catch (err) {
@@ -728,36 +730,23 @@ export default function AppointmentsPage() {
 
   const handleRateAppointment = (appointment) => {
     setSelectedApptForRating(appointment);
-    const existingRating = ratings[appointment._id];
-    setExistingRatingForAppt(existingRating || null);
     setRatingDialogOpen(true);
   };
 
   const handleRatingSubmit = async (appointmentId, rating, review) => {
     try {
-      const isEditing = !!existingRatingForAppt;
-      const url = isEditing
-        ? `${API_BASE_URL}/ratings/${existingRatingForAppt._id}`
-        : `${API_BASE_URL}/ratings/submit`;
-
-      const method = isEditing ? "PUT" : "POST";
-
-      const payload = isEditing
-        ? { rating, review }
-        : {
-            teacherId: selectedApptForRating.teacher._id,
-            sessionId: appointmentId,
-            rating,
-            review: review || "No review provided.",
-          };
-
-      const res = await fetch(url, {
-        method,
+      const res = await fetch(`${API_BASE_URL}/ratings/submit`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           auth: getToken(),
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          teacherId: selectedApptForRating.teacher._id,
+          sessionId: appointmentId,
+          rating,
+          review: review || "No review provided.",
+        }),
       });
 
       const data = await res.json();
@@ -766,12 +755,7 @@ export default function AppointmentsPage() {
         throw new Error(data.message || "Failed to submit rating");
       }
 
-      toast.success(
-        isEditing
-          ? "Review updated successfully!"
-          : "Thank you for your review!"
-      );
-
+      toast.success("Thank you for your review!");
       await fetchRatings();
       return true;
     } catch (err) {
@@ -1053,7 +1037,15 @@ export default function AppointmentsPage() {
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {list.map((appt) => {
+          // FIXED: Better rating lookup with validation
           const existingRating = ratings[appt._id];
+          console.log(
+            "Checking rating for appointment:",
+            appt._id,
+            "Rating found:",
+            existingRating
+          );
+
           const iRequested = appt.proposedBy === userId;
           const iAmTeacher = appt.teacher._id === userId;
           const iAmStudent = appt.student._id === userId;
@@ -1067,9 +1059,15 @@ export default function AppointmentsPage() {
           const courseName =
             course?.title || `Course ${appt.courseId?.substring(0, 8)}...`;
 
-          const canRate = appt.status === "completed" && iAmStudent; // Students can rate completed sessions
+          // FIXED: More robust rating check
+          const hasRated =
+            existingRating &&
+            existingRating.rating &&
+            typeof existingRating.rating === "number" &&
+            existingRating.rating > 0;
 
-          const hasRated = !!existingRating;
+          const canRate =
+            appt.status === "completed" && iAmStudent && !hasRated;
 
           // Action logic
           const needsMyApproval = appt.status === "pending" && !iRequested;
@@ -1177,28 +1175,15 @@ export default function AppointmentsPage() {
                     </Badge>
                   </div>
 
-                  {/* FIX 1: Rating display - Show rating if reviewed, show button if not reviewed but completed */}
-                  {iAmStudent && (
+                  {/* FIXED: Rating display - Show stars when rated, nothing when not rated */}
+                  {iAmStudent && hasRated && (
                     <div className="flex items-center gap-2 mt-2">
-                      {existingRating ? (
-                        <div className="flex items-center gap-2">
-                          <StarRating
-                            rating={existingRating.rating}
-                            size="sm"
-                          />
-                          <span className="text-sm text-gray-600">
-                            Your rating
-                          </span>
-                        </div>
-                      ) : appt.status === "completed" ? (
-                        <Button
-                          className="w-full text-sm py-2 bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={() => handleRateAppointment(appt)}
-                        >
-                          <Star className="w-4 h-4 mr-1" />
-                          Rate Session
-                        </Button>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <StarRating rating={existingRating.rating} size="sm" />
+                        <span className="text-sm text-gray-600">
+                          Your rating
+                        </span>
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -1266,7 +1251,16 @@ export default function AppointmentsPage() {
                   </>
                 )}
 
-                {/* FIX 1: Remove the old rating button from here since it's now in the rating display section */}
+                {/* FIXED: Rate button - Only show for completed sessions where user is student and hasn't rated yet */}
+                {canRate && (
+                  <Button
+                    className="w-full text-sm py-2 bg-purple-600 hover:bg-purple-700 text-white"
+                    onClick={() => handleRateAppointment(appt)}
+                  >
+                    <Star className="w-4 h-4 mr-1" />
+                    Rate Session
+                  </Button>
+                )}
               </div>
             </Card>
           );
@@ -1303,7 +1297,7 @@ export default function AppointmentsPage() {
                   Appointments
                 </h1>
                 <p className="text-blue-100 text-sm sm:text-base lg:text-lg xl:text-xl max-w-4xl leading-relaxed break-words">
-                  Manage your teaching and learning appointments
+                  Manage your teaching and learning sessions
                 </p>
               </div>
 
@@ -1689,7 +1683,6 @@ export default function AppointmentsPage() {
             onOpenChange={setRatingDialogOpen}
             appointment={selectedApptForRating}
             onRatingSubmit={handleRatingSubmit}
-            existingRating={existingRatingForAppt}
           />
         </div>
       </div>
