@@ -338,15 +338,49 @@ function MobileFilterDrawer({ open, onClose, filters, onFiltersChange }) {
   );
 }
 
-// Format date in local style
+// Format date in local style - FIXED to handle the date format properly
 const formatLocalDate = (dateString) => {
-  const date = new Date(dateString);
+  // Extract just the date part if it's an ISO string with time
+  const dateOnly = dateString.split("T")[0];
+  const date = new Date(dateOnly);
+
+  if (isNaN(date.getTime())) {
+    return "Invalid Date";
+  }
+
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "long",
   });
+};
+
+// Helper function to parse appointment date and time properly
+const parseAppointmentDateTime = (appt) => {
+  try {
+    // Extract just the date part from the ISO string
+    const dateOnly = appt.date.split("T")[0];
+    const dateTimeString = `${dateOnly}T${appt.time}`;
+    const dateTime = new Date(dateTimeString);
+
+    console.log(dateTime);
+
+    if (isNaN(dateTime.getTime())) {
+      console.warn(
+        "Invalid date for appointment:",
+        appt._id,
+        appt.date,
+        appt.time
+      );
+      return null;
+    }
+
+    return dateTime;
+  } catch (error) {
+    console.error("Error parsing appointment date:", error);
+    return null;
+  }
 };
 
 export default function AppointmentsPage() {
@@ -397,7 +431,7 @@ export default function AppointmentsPage() {
     setCurrentPage(1);
   }, [activeTab]);
 
-  // Fetch course information with full details including end date
+  // Fetch course information with better error handling
   const fetchCoursesForAppointments = async (appointmentsList) => {
     const courseIds = [
       ...new Set(appointmentsList.map((appt) => appt.courseId).filter(Boolean)),
@@ -415,16 +449,20 @@ export default function AppointmentsPage() {
             coursesMap[courseId] = data.data.course;
           } else {
             console.warn(`Failed to fetch course ${courseId}`);
+            // Create a fallback course object with the ID as title
             coursesMap[courseId] = {
               title: `Course ${courseId.substring(0, 8)}...`,
               _id: courseId,
+              endDate: null,
             };
           }
         } catch (err) {
           console.error(`Failed to fetch course ${courseId}:`, err);
+          // Create a fallback course object
           coursesMap[courseId] = {
             title: `Course ${courseId.substring(0, 8)}...`,
             _id: courseId,
+            endDate: null,
           };
         }
       })
@@ -446,8 +484,8 @@ export default function AppointmentsPage() {
       const now = new Date();
       const updatedAppointments = await Promise.all(
         data.data.map(async (appt) => {
-          const apptDate = new Date(`${appt.date}T${appt.time}`);
-          if (appt.status === "pending" && apptDate < now) {
+          const apptDateTime = parseAppointmentDateTime(appt);
+          if (appt.status === "pending" && apptDateTime && apptDateTime < now) {
             await fetch(`${API_BASE_URL}/appointments/${appt._id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json", auth: getToken() },
@@ -509,7 +547,7 @@ export default function AppointmentsPage() {
     fetchRatings();
   }, []);
 
-  // Filter and sort appointments - FIXED VERSION with ongoing status
+  // Filter and sort appointments - FIXED VERSION with proper date parsing
   const getFilteredAppointments = (appointmentsList) => {
     let filtered = appointmentsList.filter((appt) => {
       // Status filter
@@ -525,52 +563,68 @@ export default function AppointmentsPage() {
           return false;
       }
 
-      // Date range filter - FIXED
-      const apptDateTime = new Date(`${appt.date}T${appt.time}`);
-      const now = new Date();
+      // Date range filter - FIXED with proper date parsing
+      if (filters.dateRange !== "all") {
+        const apptDateTime = parseAppointmentDateTime(appt);
 
-      // Create dates without time for proper comparison
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const apptDateOnly = new Date(
-        apptDateTime.getFullYear(),
-        apptDateTime.getMonth(),
-        apptDateTime.getDate()
-      );
+        if (!apptDateTime) {
+          return false; // Skip appointments with invalid dates
+        }
 
-      // Calculate date ranges
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday of this week
+        const now = new Date();
 
-      const endOfWeek = new Date(today);
-      endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Saturday of this week
-      endOfWeek.setHours(23, 59, 59, 999);
+        switch (filters.dateRange) {
+          case "today": {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
+            const apptDate = new Date(apptDateTime);
+            apptDate.setHours(0, 0, 0, 0);
 
-      switch (filters.dateRange) {
-        case "today":
-          if (apptDateOnly.getTime() !== today.getTime()) return false;
-          break;
-        case "week":
-          if (apptDateOnly < startOfWeek || apptDateOnly > endOfWeek)
-            return false;
-          break;
-        case "month":
-          if (apptDateOnly < startOfMonth || apptDateOnly > endOfMonth)
-            return false;
-          break;
-        case "upcoming":
-          if (apptDateTime <= now) return false;
-          break;
-        case "past":
-          if (apptDateTime >= now) return false;
-          break;
-        case "all":
-        default:
-          // No filtering for "all"
-          break;
+            if (apptDate < today || apptDate >= tomorrow) return false;
+            break;
+          }
+          case "week": {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 7); // Next Sunday
+
+            if (apptDateTime < startOfWeek || apptDateTime >= endOfWeek)
+              return false;
+            break;
+          }
+          case "month": {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const startOfMonth = new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              1
+            );
+            const endOfMonth = new Date(
+              today.getFullYear(),
+              today.getMonth() + 1,
+              1
+            );
+
+            if (apptDateTime < startOfMonth || apptDateTime >= endOfMonth)
+              return false;
+            break;
+          }
+          case "upcoming":
+            if (apptDateTime <= now) return false;
+            break;
+          case "past":
+            if (apptDateTime >= now) return false;
+            break;
+          default:
+            break;
+        }
       }
 
       // Search filter - searches in title and course name only
@@ -591,10 +645,14 @@ export default function AppointmentsPage() {
       return true;
     });
 
-    // Sort - FIXED with proper status order including ongoing
+    // Sort - FIXED with proper date parsing
     filtered.sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.time}`);
-      const dateB = new Date(`${b.date}T${b.time}`);
+      const dateA = parseAppointmentDateTime(a);
+      const dateB = parseAppointmentDateTime(b);
+
+      // Handle invalid dates by putting them at the end
+      if (!dateA) return 1;
+      if (!dateB) return -1;
 
       switch (filters.sortBy) {
         case "date-asc":
@@ -925,9 +983,10 @@ export default function AppointmentsPage() {
           const otherPerson = iAmTeacher ? appt.student : appt.teacher;
           const otherPersonRole = iAmTeacher ? "student" : "teacher";
 
-          // Get course information
+          // Get course information - FIXED: Now uses course title instead of ID
           const course = courses[appt.courseId];
-          const courseName = course?.title || "Unknown Course";
+          const courseName =
+            course?.title || `Course ${appt.courseId?.substring(0, 8)}...`;
 
           const canRate = appt.status === "completed" && iAmStudent; // Students can rate completed sessions
 
@@ -1039,11 +1098,28 @@ export default function AppointmentsPage() {
                     </Badge>
                   </div>
 
-                  {/* Rating display */}
-                  {iAmStudent && existingRating && (
+                  {/* FIX 1: Rating display - Show rating if reviewed, show button if not reviewed but completed */}
+                  {iAmStudent && (
                     <div className="flex items-center gap-2 mt-2">
-                      <StarRating rating={existingRating.rating} size="sm" />
-                      <span className="text-sm text-gray-600">Your rating</span>
+                      {existingRating ? (
+                        <div className="flex items-center gap-2">
+                          <StarRating
+                            rating={existingRating.rating}
+                            size="sm"
+                          />
+                          <span className="text-sm text-gray-600">
+                            Your rating
+                          </span>
+                        </div>
+                      ) : appt.status === "completed" ? (
+                        <Button
+                          className="w-full text-sm py-2 bg-purple-600 hover:bg-purple-700 text-white"
+                          onClick={() => handleRateAppointment(appt)}
+                        >
+                          <Star className="w-4 h-4 mr-1" />
+                          Rate Session
+                        </Button>
+                      ) : null}
                     </div>
                   )}
                 </CardContent>
@@ -1111,20 +1187,7 @@ export default function AppointmentsPage() {
                   </>
                 )}
 
-                {/* Case 4: Completed sessions - rate if student */}
-                {appt.status === "completed" && canRate && (
-                  <Button
-                    className={`w-full text-sm py-2 ${
-                      hasRated
-                        ? "bg-yellow-600 hover:bg-yellow-700"
-                        : "bg-purple-600 hover:bg-purple-700"
-                    } text-white`}
-                    onClick={() => handleRateAppointment(appt)}
-                  >
-                    <Star className="w-4 h-4 mr-1" />
-                    {hasRated ? "Edit Review" : "Rate Session"}
-                  </Button>
-                )}
+                {/* FIX 1: Remove the old rating button from here since it's now in the rating display section */}
               </div>
             </Card>
           );
@@ -1144,7 +1207,7 @@ export default function AppointmentsPage() {
       </div>
     );
 
-  // Filter appointments for each tab
+  // Filter appointments for each tab - FIXED: Now properly applies all filters
   const filteredAsTeacher = getFilteredAppointments(asTeacher);
   const filteredAsStudent = getFilteredAppointments(asStudent);
   const filteredNeedMyAction = getFilteredAppointments(needMyAction);

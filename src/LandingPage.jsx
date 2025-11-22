@@ -17,7 +17,7 @@ export default function LandingPage() {
     return () => (document.documentElement.style.scrollBehavior = prev);
   }, []);
 
-  const handleGetStarted = () => navigate("/signup");
+  const handleGetStarted = () => navigate("/profile");
   const handleWebApp = () => navigate("/profile");
 
   const handleContactChange = (e) => {
