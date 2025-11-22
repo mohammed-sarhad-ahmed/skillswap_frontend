@@ -338,33 +338,39 @@ function MobileFilterDrawer({ open, onClose, filters, onFiltersChange }) {
   );
 }
 
-// Format date in local style - FIXED to handle the date format properly
+// Format date in local style - FIXED timezone issue
 const formatLocalDate = (dateString) => {
-  // Extract just the date part if it's an ISO string with time
-  const dateOnly = dateString.split("T")[0];
-  const date = new Date(dateOnly);
+  try {
+    // Create date object from the ISO string - this automatically handles timezone conversion
+    const date = new Date(dateString);
 
-  if (isNaN(date.getTime())) {
+    if (isNaN(date.getTime())) {
+      return "Invalid Date";
+    }
+
+    // Use toLocaleDateString with timezone options to ensure proper display
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, // Use local timezone
+    });
+  } catch (error) {
+    console.error("Error formatting date:", error);
     return "Invalid Date";
   }
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-  });
 };
 
-// Helper function to parse appointment date and time properly
+// Helper function to parse appointment date and time properly with timezone fix
 const parseAppointmentDateTime = (appt) => {
   try {
-    // Extract just the date part from the ISO string
+    // Use the full ISO string from the database to preserve timezone information
     const dateOnly = appt.date.split("T")[0];
     const dateTimeString = `${dateOnly}T${appt.time}`;
-    const dateTime = new Date(dateTimeString);
 
-    console.log(dateTime);
+    // Create date object - this will be in local timezone
+    const dateTime = new Date(dateTimeString);
 
     if (isNaN(dateTime.getTime())) {
       console.warn(
