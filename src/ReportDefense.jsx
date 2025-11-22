@@ -751,8 +751,8 @@ export default function ReportsPage() {
                       <span>
                         <strong>Pending reports:</strong> You can submit a
                         defense with evidence to contest the report within 24
-                        hours of being reported. After that is the evidence
-                        against you is conclusive we ban you
+                        hours of being reported. After that if the evidence
+                        against you is conclusive we will ban you
                       </span>
                     </li>
                     <li className="flex items-start">
