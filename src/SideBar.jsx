@@ -44,7 +44,7 @@ const navItems = [
   { title: "Connections", to: "/ConnectionPage", icon: User },
   { title: "Reviews", to: "/reviews", icon: StarIcon },
   { title: "Courses", to: "/courses", icon: BookOpen },
-  { title: "Defense", to: "/Defense", icon: Shield },
+  { title: "Report Defense", to: "/report", icon: Shield },
 ];
 
 export default function AppSidebar() {

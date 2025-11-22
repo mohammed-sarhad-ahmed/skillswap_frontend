@@ -31,6 +31,8 @@ import {
   ShieldAlert,
   MessageSquare,
   Image,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
@@ -2372,7 +2374,7 @@ function RatingsTab() {
   );
 }
 
-// Reports Tab Component with Defense Feature - FIXED SYNTAX
+// Reports Tab Component with FIXED Download Functionality
 function ReportsTab() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2386,6 +2388,86 @@ function ReportsTab() {
   // Get admin token
   const getAdminToken = () => {
     return localStorage.getItem("admin_token");
+  };
+
+  // Fixed download function
+  const downloadImage = (imageUrl, filename) => {
+    if (!imageUrl) {
+      toast.error("No image available to download");
+      return;
+    }
+
+    try {
+      // Create a temporary anchor element
+      const link = document.createElement("a");
+      link.href = imageUrl;
+      link.download = filename || `download-${Date.now()}.jpg`;
+
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Download started");
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Download failed");
+    }
+  };
+
+  // Fix the proof image URL function
+  const getProofUrl = (proofPath) => {
+    if (!proofPath) return null;
+
+    // Handle different URL formats
+    if (proofPath.startsWith("http")) {
+      return proofPath; // Already a full URL
+    }
+
+    // Remove leading slash if present and clean the path
+    const cleanPath = proofPath.startsWith("/")
+      ? proofPath.slice(1)
+      : proofPath;
+
+    // Ensure API_BASE_URL doesn't have trailing slash and path doesn't have leading slash
+    const baseUrl = API_BASE_URL.endsWith("/")
+      ? API_BASE_URL.slice(0, -1)
+      : API_BASE_URL;
+    const finalPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+
+    return `${baseUrl}${finalPath}`;
+  };
+
+  // Fix the defense image URL function
+  const getDefenseImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+
+    // Handle different URL formats
+    if (imagePath.startsWith("http")) {
+      return imagePath; // Already a full URL
+    }
+
+    // Remove leading slash if present and clean the path
+    const cleanPath = imagePath.startsWith("/")
+      ? imagePath.slice(1)
+      : imagePath;
+
+    // Ensure API_BASE_URL doesn't have trailing slash and path doesn't have leading slash
+    const baseUrl = API_BASE_URL.endsWith("/")
+      ? API_BASE_URL.slice(0, -1)
+      : API_BASE_URL;
+    const finalPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+
+    return `${baseUrl}${finalPath}`;
+  };
+
+  // Open image in new tab
+  const handleOpenInNewTab = (imageUrl) => {
+    if (!imageUrl) {
+      toast.error("No image available");
+      return;
+    }
+    window.open(imageUrl, "_blank", "noopener,noreferrer");
   };
 
   // Fetch reports from backend
@@ -2435,7 +2517,7 @@ function ReportsTab() {
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/report/admin/${reportId}/defense`,
+        `${API_BASE_URL}/admin/defense/${reportId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -2606,15 +2688,6 @@ function ReportsTab() {
       other: "Other",
     };
     return titleMap[title] || title;
-  };
-
-  // Fix for proof image URL - remove double slash
-  const getProofUrl = (proofPath) => {
-    if (!proofPath) return null;
-    const cleanPath = proofPath.startsWith("/")
-      ? proofPath.slice(1)
-      : proofPath;
-    return `${API_BASE_URL}/${cleanPath}`;
   };
 
   if (loading) {
@@ -2986,7 +3059,7 @@ function ReportsTab() {
                 </div>
               </div>
 
-              {/* Proof Section */}
+              {/* Proof Section with FIXED Download */}
               {selectedReport.proof && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">
@@ -3007,6 +3080,29 @@ function ReportsTab() {
                         <FileText className="h-12 w-12 text-gray-400" />
                         <span className="ml-2 text-gray-500">Proof Image</span>
                       </div>
+                    </div>
+                    <div className="flex justify-center space-x-4 p-4 bg-gray-50 border-t border-gray-200">
+                      <button
+                        onClick={() =>
+                          downloadImage(
+                            getProofUrl(selectedReport.proof),
+                            `proof-${selectedReport._id}.jpg`
+                          )
+                        }
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Download</span>
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleOpenInNewTab(getProofUrl(selectedReport.proof))
+                        }
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        <span>Open in New Tab</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -3166,41 +3262,62 @@ function ReportsTab() {
                 </div>
               </div>
 
-              {/* Defense Proof Images */}
+              {/* Defense Proof Images with FIXED Download */}
               {selectedDefense.defense &&
-                selectedDefense.defense.defenseImages &&
-                selectedDefense.defense.defenseImages.length > 0 && (
+                selectedDefense.defense.defenseImage && (
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Defense Proof Images
+                      Defense Proof
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {selectedDefense.defense.defenseImages.map(
-                        (imagePath, index) => (
-                          <div
-                            key={index}
-                            className="border border-gray-200 rounded-lg overflow-hidden"
-                          >
-                            <div className="h-48 bg-gray-100 flex items-center justify-center">
-                              <img
-                                src={getProofUrl(imagePath)}
-                                alt={`Defense proof ${index + 1}`}
-                                className="h-full w-full object-contain"
-                                onError={(e) => {
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <div className="hidden h-full w-full items-center justify-center bg-gray-100">
-                                <Image className="h-8 w-8 text-gray-400" />
-                                <span className="ml-2 text-gray-500">
-                                  Image {index + 1}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      )}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="h-64 bg-gray-100 flex items-center justify-center">
+                        <img
+                          src={getDefenseImageUrl(
+                            selectedDefense.defense.defenseImage
+                          )}
+                          alt="Defense proof"
+                          className="h-full w-full object-contain"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                        <div className="hidden h-full w-full items-center justify-center bg-gray-100">
+                          <Image className="h-12 w-12 text-gray-400" />
+                          <span className="ml-2 text-gray-500">
+                            Defense Image
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-center space-x-4 p-4 bg-gray-50 border-t border-gray-200">
+                        <button
+                          onClick={() =>
+                            downloadImage(
+                              getDefenseImageUrl(
+                                selectedDefense.defense.defenseImage
+                              ),
+                              `defense-${selectedDefense.report._id}.jpg`
+                            )
+                          }
+                          className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <Download className="h-4 w-4" />
+                          <span>Download</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleOpenInNewTab(
+                              getDefenseImageUrl(
+                                selectedDefense.defense.defenseImage
+                              )
+                            )
+                          }
+                          className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          <span>Open in New Tab</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

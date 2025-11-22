@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import toast from "react-hot-toast";
 import { Button } from "./components/ui/button";
+import { API_BASE_URL } from "./Config";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -26,17 +27,30 @@ export default function LandingPage() {
 
   const submitContact = async (e) => {
     e.preventDefault();
+
     if (!contact.name || !contact.email || !contact.message) {
       toast.error("Please fill all fields");
       return;
     }
+
     setSending(true);
+
     try {
-      await new Promise((r) => setTimeout(r, 700));
-      toast.success("Message sent — we'll get back to you shortly.");
+      const res = await fetch(`${API_BASE_URL}/admin/contact-us`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(contact),
+      });
+
+      if (!res.ok) throw new Error();
+
+      toast.success("Message sent — we’ll hit you back soon ✨");
       setContact({ name: "", email: "", message: "" });
-    } catch {
-      toast.error("Failed to send message");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send message, try again later 😬");
     } finally {
       setSending(false);
     }

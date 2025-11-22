@@ -26,8 +26,7 @@ import LandingPage from "./LandingPage";
 import AdminLogin from "./AdminLogin";
 import AdminDashboard from "./AdminDashboard";
 import AdminPrivateRoute from "./PrivateAdmin";
-import DefensePage from "./ReportDefense";
-
+import ReportsPage from "./ReportDefense";
 export default function App() {
   return (
     <BrowserRouter>
@@ -56,7 +55,7 @@ export default function App() {
             <Route path="/reviews" element={<ReviewsManagement />} />
             <Route path="/courses" element={<CourseManagementPage />} />
             <Route path="/courses/:courseId" element={<CoursePage />} />
-            <Route path="/Defense" element={<DefensePage />} />
+            <Route path="/report" element={<ReportsPage />} />
             <Route
               path="/ConnectionRequests"
               element={<ConnectionRequestsPage />}
