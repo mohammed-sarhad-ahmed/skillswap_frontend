@@ -51,6 +51,9 @@ import {
   Send,
   FileUp,
   ClipboardCheck,
+  BarChart3,
+  TrendingUp,
+  Target,
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router";
 import { getToken, getUserId } from "./ManageToken";
@@ -386,6 +389,138 @@ export default function CoursePage() {
       return `${formattedDate} • ${formattedTime}`;
     } catch (error) {
       return `${dateString} • ${timeString}`;
+    }
+  };
+
+  // Grade calculation functions
+  const getAllAssignmentsWithGrades = () => {
+    if (!course) return { userA: [], userB: [] };
+
+    const assignments = {
+      userA: [],
+      userB: [],
+    };
+
+    // Process userA weekly structure
+    if (course.userAWeeklyStructure) {
+      course.userAWeeklyStructure.forEach((week) => {
+        week.content?.forEach((item) => {
+          if (item.type === "assignment" && item.assignment) {
+            const assignmentData = {
+              ...item.assignment,
+              weekNumber: week.weekNumber,
+              weekTitle: week.title,
+              id: item.id,
+            };
+
+            // Check if userB has submitted and been graded
+            if (item.assignment.submissions) {
+              item.assignment.submissions.forEach((submission) => {
+                if (
+                  submission.studentId === course.userB?._id ||
+                  submission.studentId?._id === course.userB?._id
+                ) {
+                  assignments.userB.push({
+                    ...assignmentData,
+                    submission: submission,
+                    graded: !!submission.grade,
+                    points: submission.grade?.points || 0,
+                    maxPoints:
+                      submission.grade?.maxPoints || assignmentData.maxPoints,
+                    feedback: submission.grade?.feedback,
+                    submittedAt: submission.submittedAt,
+                  });
+                }
+              });
+            }
+          }
+        });
+      });
+    }
+
+    // Process userB weekly structure
+    if (course.userBWeeklyStructure) {
+      course.userBWeeklyStructure.forEach((week) => {
+        week.content?.forEach((item) => {
+          if (item.type === "assignment" && item.assignment) {
+            const assignmentData = {
+              ...item.assignment,
+              weekNumber: week.weekNumber,
+              weekTitle: week.title,
+              id: item.id,
+            };
+
+            // Check if userA has submitted and been graded
+            if (item.assignment.submissions) {
+              item.assignment.submissions.forEach((submission) => {
+                if (
+                  submission.studentId === course.userA?._id ||
+                  submission.studentId?._id === course.userA?._id
+                ) {
+                  assignments.userA.push({
+                    ...assignmentData,
+                    submission: submission,
+                    graded: !!submission.grade,
+                    points: submission.grade?.points || 0,
+                    maxPoints:
+                      submission.grade?.maxPoints || assignmentData.maxPoints,
+                    feedback: submission.grade?.feedback,
+                    submittedAt: submission.submittedAt,
+                  });
+                }
+              });
+            }
+          }
+        });
+      });
+    }
+
+    return assignments;
+  };
+
+  const calculateUserGrades = (userAssignments) => {
+    const gradedAssignments = userAssignments.filter((a) => a.graded);
+    const totalPoints = gradedAssignments.reduce((sum, a) => sum + a.points, 0);
+    const totalMaxPoints = gradedAssignments.reduce(
+      (sum, a) => sum + a.maxPoints,
+      0
+    );
+    const averageGrade =
+      totalMaxPoints > 0 ? (totalPoints / totalMaxPoints) * 100 : 0;
+
+    return {
+      assignments: userAssignments,
+      gradedCount: gradedAssignments.length,
+      totalCount: userAssignments.length,
+      totalPoints,
+      totalMaxPoints,
+      averageGrade: Math.round(averageGrade * 10) / 10,
+      completionRate:
+        userAssignments.length > 0
+          ? (gradedAssignments.length / userAssignments.length) * 100
+          : 0,
+    };
+  };
+
+  const getCurrentUserGrades = () => {
+    const assignments = getAllAssignmentsWithGrades();
+    const currentUserId = getUserId();
+
+    if (currentUserId === course?.userA?._id) {
+      return calculateUserGrades(assignments.userA);
+    } else {
+      return calculateUserGrades(assignments.userB);
+    }
+  };
+
+  const getOtherUserGrades = () => {
+    const assignments = getAllAssignmentsWithGrades();
+    const currentUserId = getUserId();
+
+    if (currentUserId === course?.userA?._id) {
+      return calculateUserGrades(assignments.userB);
+    } else {
+      return calculateUserGrades(assignments.userA);
     }
   };
 
@@ -1074,6 +1209,443 @@ export default function CoursePage() {
   const hasWeeklyStructure =
     currentWeeklyStructure && currentWeeklyStructure.length > 0;
 
+  // Grade data
+  const currentUserGrades = getCurrentUserGrades();
+  const otherUserGrades = getOtherUserGrades();
+
+  // Render Grades Tab
+  const renderGradesTab = () => {
+    return (
+      <div className="space-y-6">
+        {/* Overall Grade Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Current User Grade Card */}
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">My Grades</h3>
+                  <p className="text-sm text-gray-600">
+                    {isCurrentUserUserA
+                      ? course.userA?.fullName
+                      : course.userB?.fullName}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center p-3 bg-white rounded-lg border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {currentUserGrades.averageGrade}%
+                  </div>
+                  <div className="text-xs text-gray-500">Average Grade</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded-lg border border-blue-200">
+                  <div className="text-2xl font-bold text-green-600">
+                    {currentUserGrades.gradedCount}/
+                    {currentUserGrades.totalCount}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Graded Assignments
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total Points:</span>
+                  <span className="font-semibold">
+                    {currentUserGrades.totalPoints}/
+                    {currentUserGrades.totalMaxPoints}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Completion Rate:</span>
+                  <span className="font-semibold">
+                    {Math.round(currentUserGrades.completionRate)}%
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Other User Grade Card */}
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                  <Users className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {isOneWay
+                      ? isTeacher
+                        ? "Student's Grades"
+                        : "Teacher's Grades"
+                      : "Partner's Grades"}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {isCurrentUserUserA
+                      ? course.userB?.fullName
+                      : course.userA?.fullName}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center p-3 bg-white rounded-lg border border-green-200">
+                  <div className="text-2xl font-bold text-green-600">
+                    {otherUserGrades.averageGrade}%
+                  </div>
+                  <div className="text-xs text-gray-500">Average Grade</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded-lg border border-green-200">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {otherUserGrades.gradedCount}/{otherUserGrades.totalCount}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Graded Assignments
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total Points:</span>
+                  <span className="font-semibold">
+                    {otherUserGrades.totalPoints}/
+                    {otherUserGrades.totalMaxPoints}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Completion Rate:</span>
+                  <span className="font-semibold">
+                    {Math.round(otherUserGrades.completionRate)}%
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed Assignments Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* My Assignments */}
+          <Card>
+            <CardHeader className="bg-blue-50 border-b border-blue-200">
+              <CardTitle className="flex items-center gap-2 text-blue-900">
+                <Award className="w-5 h-5" />
+                My Assignments
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {currentUserGrades.assignments.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  <FileCheck className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p>No assignments found</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {currentUserGrades.assignments.map((assignment, index) => (
+                    <div
+                      key={index}
+                      className="p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">
+                            {assignment.title}
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            Week {assignment.weekNumber}: {assignment.weekTitle}
+                          </p>
+                          {assignment.description && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {assignment.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right ml-4">
+                          <div
+                            className={`text-lg font-bold ${
+                              assignment.graded
+                                ? assignment.points / assignment.maxPoints >=
+                                  0.7
+                                  ? "text-green-600"
+                                  : assignment.points / assignment.maxPoints >=
+                                    0.5
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {assignment.graded
+                              ? `${assignment.points}/${assignment.maxPoints}`
+                              : "Not Graded"}
+                          </div>
+                          {assignment.graded && (
+                            <div className="text-sm text-gray-500">
+                              {Math.round(
+                                (assignment.points / assignment.maxPoints) * 100
+                              )}
+                              %
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              assignment.graded ? "default" : "secondary"
+                            }
+                            className={
+                              assignment.graded
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }
+                          >
+                            {assignment.graded ? "Graded" : "Pending"}
+                          </Badge>
+                          {assignment.submittedAt && (
+                            <span className="text-xs text-gray-500">
+                              Submitted:{" "}
+                              {new Date(
+                                assignment.submittedAt
+                              ).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+
+                        {assignment.graded && assignment.feedback && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              toast.success(
+                                `Feedback: ${assignment.feedback}`,
+                                {
+                                  duration: 4000,
+                                }
+                              );
+                            }}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View Feedback
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Other User's Assignments */}
+          <Card>
+            <CardHeader className="bg-green-50 border-b border-green-200">
+              <CardTitle className="flex items-center gap-2 text-green-900">
+                <Users className="w-5 h-5" />
+                {isOneWay
+                  ? isTeacher
+                    ? "Student's Assignments"
+                    : "Teacher's Assignments"
+                  : "Partner's Assignments"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {otherUserGrades.assignments.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  <FileCheck className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p>No assignments found</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {otherUserGrades.assignments.map((assignment, index) => (
+                    <div
+                      key={index}
+                      className="p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">
+                            {assignment.title}
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            Week {assignment.weekNumber}: {assignment.weekTitle}
+                          </p>
+                          {assignment.description && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {assignment.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right ml-4">
+                          <div
+                            className={`text-lg font-bold ${
+                              assignment.graded
+                                ? assignment.points / assignment.maxPoints >=
+                                  0.7
+                                  ? "text-green-600"
+                                  : assignment.points / assignment.maxPoints >=
+                                    0.5
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {assignment.graded
+                              ? `${assignment.points}/${assignment.maxPoints}`
+                              : "Not Graded"}
+                          </div>
+                          {assignment.graded && (
+                            <div className="text-sm text-gray-500">
+                              {Math.round(
+                                (assignment.points / assignment.maxPoints) * 100
+                              )}
+                              %
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              assignment.graded ? "default" : "secondary"
+                            }
+                            className={
+                              assignment.graded
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }
+                          >
+                            {assignment.graded ? "Graded" : "Pending"}
+                          </Badge>
+                          {assignment.submittedAt && (
+                            <span className="text-xs text-gray-500">
+                              Submitted:{" "}
+                              {new Date(
+                                assignment.submittedAt
+                              ).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+
+                        {isTeacher &&
+                          !assignment.graded &&
+                          assignment.submittedAt && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Find the actual assignment object to open grading dialog
+                                const weeklyStructure = isCurrentUserUserA
+                                  ? course.userAWeeklyStructure
+                                  : course.userBWeeklyStructure;
+
+                                let targetAssignment = null;
+                                let targetWeek = null;
+
+                                weeklyStructure?.forEach((week) => {
+                                  week.content?.forEach((item) => {
+                                    if (
+                                      item.type === "assignment" &&
+                                      item.assignment?.title ===
+                                        assignment.title
+                                    ) {
+                                      targetAssignment = item;
+                                      targetWeek = week.weekNumber;
+                                    }
+                                  });
+                                });
+
+                                if (targetAssignment && targetWeek) {
+                                  const submission =
+                                    targetAssignment.assignment.submissions?.find(
+                                      (sub) =>
+                                        sub.studentId ===
+                                        (isCurrentUserUserA
+                                          ? course.userB?._id
+                                          : course.userA?._id)
+                                    );
+                                  if (submission) {
+                                    openGradeAssignment(
+                                      submission,
+                                      targetAssignment,
+                                      targetWeek
+                                    );
+                                  }
+                                }
+                              }}
+                            >
+                              <Award className="w-4 h-4 mr-1" />
+                              Grade
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Progress Statistics */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Progress Statistics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <Target className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-blue-600">
+                  {currentUserGrades.gradedCount}
+                </div>
+                <div className="text-sm text-gray-600">
+                  My Graded Assignments
+                </div>
+              </div>
+
+              <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                <BarChart3 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-green-600">
+                  {otherUserGrades.gradedCount}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {isOneWay
+                    ? isTeacher
+                      ? "Student's Graded"
+                      : "Teacher's Graded"
+                    : "Partner's Graded"}
+                </div>
+              </div>
+
+              <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <CheckCircle className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-purple-600">
+                  {currentUserGrades.totalCount + otherUserGrades.totalCount}
+                </div>
+                <div className="text-sm text-gray-600">Total Assignments</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   return (
     <>
       {/* Header Section */}
@@ -1284,55 +1856,76 @@ export default function CoursePage() {
       </div>
 
       {/* Tab Navigation */}
-      {course.exchangeType === "mutual" && (
-        <div className="bg-white border-b">
-          <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
-            <div className="flex overflow-x-auto scrollbar-hide -mb-px">
-              <button
-                onClick={() => setActiveTab("myLearning")}
-                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
-                  activeTab === "myLearning"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <BookOpen className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate">My Learning</span>
-                <Badge
-                  variant="secondary"
-                  className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5"
+      <div className="bg-white border-b">
+        <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
+          <div className="flex overflow-x-auto scrollbar-hide -mb-px">
+            {course.exchangeType === "mutual" && (
+              <>
+                <button
+                  onClick={() => setActiveTab("myLearning")}
+                  className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
+                    activeTab === "myLearning"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
                 >
-                  {isCurrentUserUserA
-                    ? course.userBTeaching?.skill || ""
-                    : course.userATeaching?.skill || ""}
-                </Badge>
-              </button>
-              <button
-                onClick={() => setActiveTab("myTeaching")}
-                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
-                  activeTab === "myTeaching"
-                    ? "border-green-500 text-green-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Users className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate">My Teaching</span>
-                <Badge
-                  variant="secondary"
-                  className="ml-1 bg-green-100 text-green-800 text-xs px-1.5 py-0.5"
+                  <BookOpen className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">My Learning</span>
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5"
+                  >
+                    {isCurrentUserUserA
+                      ? course.userBTeaching?.skill || ""
+                      : course.userATeaching?.skill || ""}
+                  </Badge>
+                </button>
+                <button
+                  onClick={() => setActiveTab("myTeaching")}
+                  className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
+                    activeTab === "myTeaching"
+                      ? "border-green-500 text-green-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
                 >
-                  {isCurrentUserUserA
-                    ? course.userATeaching?.skill || ""
-                    : course.userBTeaching?.skill || ""}
-                </Badge>
-              </button>
-            </div>
+                  <Users className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">My Teaching</span>
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 bg-green-100 text-green-800 text-xs px-1.5 py-0.5"
+                  >
+                    {isCurrentUserUserA
+                      ? course.userATeaching?.skill || ""
+                      : course.userBTeaching?.skill || ""}
+                  </Badge>
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setActiveTab("grades")}
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 min-w-0 ${
+                activeTab === "grades"
+                  ? "border-purple-500 text-purple-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">Grades</span>
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-purple-100 text-purple-800 text-xs px-1.5 py-0.5"
+              >
+                {currentUserGrades.gradedCount > 0
+                  ? `${currentUserGrades.gradedCount} graded`
+                  : "No grades"}
+              </Badge>
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* One-Way Role Header */}
-      {isOneWay && (
+      {isOneWay && activeTab !== "grades" && (
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
             <div className="flex items-center justify-center py-4">
@@ -1365,51 +1958,53 @@ export default function CoursePage() {
       )}
 
       {/* Action Bar */}
-      {(canUploadFiles || canCreateAssignments) && !isCoursePending && (
-        <div className="bg-white border-b">
-          <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
-            <div className="flex flex-col sm:flex-row sm:items-center py-3 sm:py-4 gap-2 sm:gap-3">
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                {canUploadFiles && (
-                  <Button
-                    onClick={() => setUploadDialogOpen(true)}
-                    className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
-                    size="sm"
-                  >
-                    <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span>Upload File</span>
-                  </Button>
-                )}
-                {canCreateAssignments && (
-                  <Button
-                    onClick={openCreateAssignment}
-                    className="flex items-center gap-1.5 sm:gap-2 bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
-                    size="sm"
-                  >
-                    <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span>Create Assignment</span>
-                  </Button>
-                )}
-              </div>
-              <div className="text-xs sm:text-sm text-gray-600">
-                {isOneWay ? (
-                  <span>
-                    Add learning materials and assignments for your student
-                  </span>
-                ) : (
-                  <span>
-                    Add teaching materials and assignments for your exchange
-                    partner
-                  </span>
-                )}
+      {(canUploadFiles || canCreateAssignments) &&
+        !isCoursePending &&
+        activeTab !== "grades" && (
+          <div className="bg-white border-b">
+            <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
+              <div className="flex flex-col sm:flex-row sm:items-center py-3 sm:py-4 gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  {canUploadFiles && (
+                    <Button
+                      onClick={() => setUploadDialogOpen(true)}
+                      className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
+                      size="sm"
+                    >
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span>Upload File</span>
+                    </Button>
+                  )}
+                  {canCreateAssignments && (
+                    <Button
+                      onClick={openCreateAssignment}
+                      className="flex items-center gap-1.5 sm:gap-2 bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
+                      size="sm"
+                    >
+                      <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span>Create Assignment</span>
+                    </Button>
+                  )}
+                </div>
+                <div className="text-xs sm:text-sm text-gray-600">
+                  {isOneWay ? (
+                    <span>
+                      Add learning materials and assignments for your student
+                    </span>
+                  ) : (
+                    <span>
+                      Add teaching materials and assignments for your exchange
+                      partner
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Pending Course Warning */}
-      {isCoursePending && (
+      {isCoursePending && activeTab !== "grades" && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-3 sm:mx-4 lg:mx-6 mt-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -1428,484 +2023,512 @@ export default function CoursePage() {
 
       {/* Course Content */}
       <div className="min-h-screen bg-gray-50/30 py-4 sm:py-6 lg:py-8">
-        <div className="mx-3 sm:mx-4 lg:mx-6 space-y-3 sm:space-y-4 lg:space-y-6">
-          {hasWeeklyStructure ? (
-            currentWeeklyStructure.map((week) => {
-              const filteredContent = filterAppointmentsForCurrentContext(
-                week.content || []
-              );
+        <div className="mx-3 sm:mx-4 lg:mx-6">
+          {activeTab === "grades" ? (
+            renderGradesTab()
+          ) : (
+            <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+              {hasWeeklyStructure ? (
+                currentWeeklyStructure.map((week) => {
+                  const filteredContent = filterAppointmentsForCurrentContext(
+                    week.content || []
+                  );
 
-              return (
-                <div
-                  key={week.weekNumber}
-                  className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-                >
-                  <div
-                    className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
-                    onClick={() => toggleWeek(week.weekNumber)}
-                  >
-                    <div className="flex items-start justify-between gap-3 sm:gap-4">
-                      <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div
-                          className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0 ${
-                            week.completed
-                              ? "bg-green-100 text-green-600"
-                              : (isOneWay && isTeacher) ||
-                                (!isOneWay && activeTab === "myTeaching")
-                              ? "bg-orange-100 text-orange-600"
-                              : "bg-blue-100 text-blue-600"
-                          }`}
-                        >
-                          {expandedWeeks.has(week.weekNumber) ? (
-                            <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
-                            <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
-                              Week {week.weekNumber}:{" "}
-                              {week.title || "Untitled Week"}
-                            </h3>
-                            <div className="flex gap-1 sm:gap-2 flex-wrap">
-                              {week.completed && (
-                                <Badge className="bg-green-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Completed
-                                </Badge>
-                              )}
-                              {((isOneWay && isTeacher) ||
-                                (!isOneWay && activeTab === "myTeaching")) &&
-                                !week.completed && (
-                                  <Badge className="bg-orange-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                    {isOneWay ? "Teaching" : "Teaching"}
-                                  </Badge>
-                                )}
-                              {((isOneWay && isStudent) ||
-                                (!isOneWay && activeTab === "myLearning")) &&
-                                !week.completed && (
-                                  <Badge className="bg-blue-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
-                                    Learning
-                                  </Badge>
-                                )}
-                            </div>
-                          </div>
-                          <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
-                            {week.description || "No description provided"}
-                          </p>
-
-                          <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
-                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                              <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-                              <span>
-                                {
-                                  filteredContent.filter(
-                                    (item) => item.type === "document"
-                                  ).length
-                                }{" "}
-                                docs
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                              <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                              <span>
-                                {
-                                  filteredContent.filter(
-                                    (item) => item.type === "appointment"
-                                  ).length
-                                }{" "}
-                                Sessions
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                              <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
-                              <span>
-                                {
-                                  filteredContent.filter(
-                                    (item) => item.type === "assignment"
-                                  ).length
-                                }{" "}
-                                Assignments
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                        {canUploadFiles && !isCoursePending && (
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              editWeek(week);
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                          >
-                            <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">Edit</span>
-                          </Button>
-                        )}
-
-                        {((isOneWay && isStudent) ||
-                          (!isOneWay && activeTab === "myLearning")) &&
-                          !isCoursePending && (
-                            <>
-                              {!week.completed ? (
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markWeekComplete(week.weekNumber);
-                                  }}
-                                  className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
-                                  size="sm"
-                                >
-                                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span className="hidden sm:inline">
-                                    Complete
-                                  </span>
-                                </Button>
+                  return (
+                    <div
+                      key={week.weekNumber}
+                      className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
+                    >
+                      <div
+                        className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                        onClick={() => toggleWeek(week.weekNumber)}
+                      >
+                        <div className="flex items-start justify-between gap-3 sm:gap-4">
+                          <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                            <div
+                              className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0 ${
+                                week.completed
+                                  ? "bg-green-100 text-green-600"
+                                  : (isOneWay && isTeacher) ||
+                                    (!isOneWay && activeTab === "myTeaching")
+                                  ? "bg-orange-100 text-orange-600"
+                                  : "bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              {expandedWeeks.has(week.weekNumber) ? (
+                                <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
                               ) : (
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    unmarkWeekComplete(week.weekNumber);
-                                  }}
-                                  className="flex items-center gap-1 sm:gap-2 bg-gray-600 hover:bg-gray-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
-                                  size="sm"
-                                >
-                                  <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span className="hidden sm:inline">Undo</span>
-                                </Button>
+                                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                               )}
-                            </>
-                          )}
-                      </div>
-                    </div>
-                  </div>
+                            </div>
 
-                  <div
-                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                      expandedWeeks.has(week.weekNumber)
-                        ? "max-h-[2000px] opacity-100 border-t border-gray-200"
-                        : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    <div className="p-4 sm:p-6">
-                      <div className="mb-4 sm:mb-6">
-                        {filteredContent.length === 0 ? (
-                          <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
-                            <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
-                            <p className="text-gray-500 text-base sm:text-lg font-medium">
-                              No content added yet for this week
-                            </p>
-                            <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
-                              {canUploadFiles || canCreateAssignments
-                                ? isCoursePending
-                                  ? "Content creation will be available once course is active"
-                                  : "Add files, assignments, or appointments to get started"
-                                : "Check back later for course materials"}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {/* Moodle-style row layout for all content types */}
-                            {filteredContent.map((item) => {
-                              const appointmentData =
-                                item.type === "appointment"
-                                  ? getAppointmentDisplayData(item)
-                                  : null;
-                              const userSubmission =
-                                item.type === "assignment"
-                                  ? getUserSubmission(item)
-                                  : null;
-
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border ${
-                                    item.type === "assignment"
-                                      ? "bg-purple-50 border-purple-200"
-                                      : item.type === "appointment"
-                                      ? "bg-blue-50 border-blue-200"
-                                      : "bg-gray-50 border-gray-200"
-                                  } hover:shadow-sm transition-all duration-200`}
-                                >
-                                  {/* Icon */}
-                                  <div className="flex-shrink-0">
-                                    {getFileIcon(item.fileType, item.type)}
-                                  </div>
-
-                                  {/* Content */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
-                                      <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
-                                        {item.type === "appointment"
-                                          ? appointmentData?.title ||
-                                            "Appointment"
-                                          : item.type === "assignment"
-                                          ? item.assignment?.title ||
-                                            "Assignment"
-                                          : item.title || "Document"}
-                                      </h4>
-                                      <div className="flex gap-2 flex-wrap">
-                                        {item.type === "appointment" &&
-                                          appointmentData && (
-                                            <Badge
-                                              variant={
-                                                appointmentData.status ===
-                                                "confirmed"
-                                                  ? "default"
-                                                  : appointmentData.status ===
-                                                    "pending"
-                                                  ? "secondary"
-                                                  : "destructive"
-                                              }
-                                              className="text-xs"
-                                            >
-                                              {appointmentData.status ===
-                                              "confirmed"
-                                                ? "Confirmed"
-                                                : appointmentData.status ===
-                                                  "pending"
-                                                ? "Pending"
-                                                : "Cancelled"}
-                                            </Badge>
-                                          )}
-                                        {item.type === "assignment" && (
-                                          <Badge
-                                            variant="outline"
-                                            className="text-xs bg-purple-100 text-purple-800"
-                                          >
-                                            Assignment
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <p className="text-xs sm:text-sm text-gray-500 mb-2">
-                                      {item.type === "appointment" &&
-                                      appointmentData
-                                        ? formatAppointmentDateTime(
-                                            appointmentData.date,
-                                            appointmentData.time
-                                          )
-                                        : item.type === "assignment"
-                                        ? `Due: ${
-                                            item.assignment?.dueDate
-                                              ? new Date(
-                                                  item.assignment.dueDate
-                                                ).toLocaleDateString()
-                                              : "No due date"
-                                          } • ${
-                                            item.assignment?.maxPoints || 0
-                                          } points`
-                                        : `Uploaded ${item.uploadDate} • ${item.size}`}
-                                    </p>
-
-                                    {(item.description ||
-                                      (item.type === "appointment" &&
-                                        appointmentData?.description) ||
-                                      (item.type === "assignment" &&
-                                        item.assignment?.description)) && (
-                                      <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 break-words">
-                                        {item.type === "appointment"
-                                          ? appointmentData?.description
-                                          : item.type === "assignment"
-                                          ? item.assignment?.description
-                                          : item.description}
-                                      </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
+                                <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
+                                  Week {week.weekNumber}:{" "}
+                                  {week.title || "Untitled Week"}
+                                </h3>
+                                <div className="flex gap-1 sm:gap-2 flex-wrap">
+                                  {week.completed && (
+                                    <Badge className="bg-green-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Completed
+                                    </Badge>
+                                  )}
+                                  {((isOneWay && isTeacher) ||
+                                    (!isOneWay &&
+                                      activeTab === "myTeaching")) &&
+                                    !week.completed && (
+                                      <Badge className="bg-orange-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                        {isOneWay ? "Teaching" : "Teaching"}
+                                      </Badge>
                                     )}
+                                  {((isOneWay && isStudent) ||
+                                    (!isOneWay &&
+                                      activeTab === "myLearning")) &&
+                                    !week.completed && (
+                                      <Badge className="bg-blue-500 text-white flex-shrink-0 text-xs px-2 py-0.5">
+                                        Learning
+                                      </Badge>
+                                    )}
+                                </div>
+                              </div>
+                              <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
+                                {week.description || "No description provided"}
+                              </p>
 
-                                    {item.type === "assignment" &&
-                                      userSubmission && (
-                                        <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
-                                          <div className="flex items-center justify-between text-xs">
-                                            <span className="text-blue-700 font-medium">
-                                              Submitted
-                                            </span>
-                                            {userSubmission.grade ? (
-                                              <Badge className="bg-green-500 text-white">
-                                                <Award className="w-3 h-3 mr-1" />
-                                                {userSubmission.grade.points}/
-                                                {userSubmission.grade.maxPoints}
-                                              </Badge>
-                                            ) : (
+                              <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
+                                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                                  <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <span>
+                                    {
+                                      filteredContent.filter(
+                                        (item) => item.type === "document"
+                                      ).length
+                                    }{" "}
+                                    docs
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                                  <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <span>
+                                    {
+                                      filteredContent.filter(
+                                        (item) => item.type === "appointment"
+                                      ).length
+                                    }{" "}
+                                    Sessions
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                                  <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <span>
+                                    {
+                                      filteredContent.filter(
+                                        (item) => item.type === "assignment"
+                                      ).length
+                                    }{" "}
+                                    Assignments
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                            {canUploadFiles && !isCoursePending && (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  editWeek(week);
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                              >
+                                <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </Button>
+                            )}
+
+                            {((isOneWay && isStudent) ||
+                              (!isOneWay && activeTab === "myLearning")) &&
+                              !isCoursePending && (
+                                <>
+                                  {!week.completed ? (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markWeekComplete(week.weekNumber);
+                                      }}
+                                      className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                      size="sm"
+                                    >
+                                      <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      <span className="hidden sm:inline">
+                                        Complete
+                                      </span>
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        unmarkWeekComplete(week.weekNumber);
+                                      }}
+                                      className="flex items-center gap-1 sm:gap-2 bg-gray-600 hover:bg-gray-700 text-white h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                      size="sm"
+                                    >
+                                      <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      <span className="hidden sm:inline">
+                                        Undo
+                                      </span>
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                          expandedWeeks.has(week.weekNumber)
+                            ? "max-h-[2000px] opacity-100 border-t border-gray-200"
+                            : "max-h-0 opacity-0"
+                        }`}
+                      >
+                        <div className="p-4 sm:p-6">
+                          <div className="mb-4 sm:mb-6">
+                            {filteredContent.length === 0 ? (
+                              <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
+                                <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+                                <p className="text-gray-500 text-base sm:text-lg font-medium">
+                                  No content added yet for this week
+                                </p>
+                                <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
+                                  {canUploadFiles || canCreateAssignments
+                                    ? isCoursePending
+                                      ? "Content creation will be available once course is active"
+                                      : "Add files, assignments, or appointments to get started"
+                                    : "Check back later for course materials"}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {/* Moodle-style row layout for all content types */}
+                                {filteredContent.map((item) => {
+                                  const appointmentData =
+                                    item.type === "appointment"
+                                      ? getAppointmentDisplayData(item)
+                                      : null;
+                                  const userSubmission =
+                                    item.type === "assignment"
+                                      ? getUserSubmission(item)
+                                      : null;
+
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className={`flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border ${
+                                        item.type === "assignment"
+                                          ? "bg-purple-50 border-purple-200"
+                                          : item.type === "appointment"
+                                          ? "bg-blue-50 border-blue-200"
+                                          : "bg-gray-50 border-gray-200"
+                                      } hover:shadow-sm transition-all duration-200`}
+                                    >
+                                      {/* Icon */}
+                                      <div className="flex-shrink-0">
+                                        {getFileIcon(item.fileType, item.type)}
+                                      </div>
+
+                                      {/* Content */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
+                                          <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
+                                            {item.type === "appointment"
+                                              ? appointmentData?.title ||
+                                                "Appointment"
+                                              : item.type === "assignment"
+                                              ? item.assignment?.title ||
+                                                "Assignment"
+                                              : item.title || "Document"}
+                                          </h4>
+                                          <div className="flex gap-2 flex-wrap">
+                                            {item.type === "appointment" &&
+                                              appointmentData && (
+                                                <Badge
+                                                  variant={
+                                                    appointmentData.status ===
+                                                    "confirmed"
+                                                      ? "default"
+                                                      : appointmentData.status ===
+                                                        "pending"
+                                                      ? "secondary"
+                                                      : "destructive"
+                                                  }
+                                                  className="text-xs"
+                                                >
+                                                  {appointmentData.status ===
+                                                  "confirmed"
+                                                    ? "Confirmed"
+                                                    : appointmentData.status ===
+                                                      "pending"
+                                                    ? "Pending"
+                                                    : "Cancelled"}
+                                                </Badge>
+                                              )}
+                                            {item.type === "assignment" && (
                                               <Badge
-                                                variant="secondary"
-                                                className="bg-yellow-500 text-white"
+                                                variant="outline"
+                                                className="text-xs bg-purple-100 text-purple-800"
                                               >
-                                                Pending Grade
+                                                Assignment
                                               </Badge>
                                             )}
                                           </div>
-                                          {userSubmission.grade?.feedback && (
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              {userSubmission.grade.feedback}
-                                            </p>
-                                          )}
                                         </div>
-                                      )}
-                                  </div>
 
-                                  {/* Actions */}
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    {item.type === "document" && (
-                                      <>
-                                        {isViewableFile(item.fileType) && (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 sm:h-8 text-xs"
-                                            onClick={() =>
-                                              viewFile(item.fileUrl)
-                                            }
-                                          >
-                                            <Eye className="w-3 h-3 mr-1" />
-                                            View
-                                          </Button>
+                                        <p className="text-xs sm:text-sm text-gray-500 mb-2">
+                                          {item.type === "appointment" &&
+                                          appointmentData
+                                            ? formatAppointmentDateTime(
+                                                appointmentData.date,
+                                                appointmentData.time
+                                              )
+                                            : item.type === "assignment"
+                                            ? `Due: ${
+                                                item.assignment?.dueDate
+                                                  ? new Date(
+                                                      item.assignment.dueDate
+                                                    ).toLocaleDateString()
+                                                  : "No due date"
+                                              } • ${
+                                                item.assignment?.maxPoints || 0
+                                              } points`
+                                            : `Uploaded ${item.uploadDate} • ${item.size}`}
+                                        </p>
+
+                                        {(item.description ||
+                                          (item.type === "appointment" &&
+                                            appointmentData?.description) ||
+                                          (item.type === "assignment" &&
+                                            item.assignment?.description)) && (
+                                          <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 break-words">
+                                            {item.type === "appointment"
+                                              ? appointmentData?.description
+                                              : item.type === "assignment"
+                                              ? item.assignment?.description
+                                              : item.description}
+                                          </p>
                                         )}
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-7 sm:h-8 text-xs"
-                                          onClick={() =>
-                                            downloadFile(
-                                              item.fileUrl,
-                                              item.title
-                                            )
-                                          }
-                                        >
-                                          <Download className="w-3 h-3 mr-1" />
-                                          Download
-                                        </Button>
-                                      </>
-                                    )}
-                                    {item.type === "appointment" &&
-                                      appointmentData && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-7 sm:h-8 text-xs"
-                                          onClick={navigateToAppointments}
-                                        >
-                                          <ExternalLink className="w-3 h-3 mr-1" />
-                                          Manage
-                                        </Button>
-                                      )}
-                                    {item.type === "assignment" && (
-                                      <>
-                                        {((course.exchangeType === "mutual" &&
-                                          activeTab === "myLearning") ||
-                                          (course.exchangeType === "one-way" &&
-                                            isStudent)) && (
+
+                                        {item.type === "assignment" &&
+                                          userSubmission && (
+                                            <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                                              <div className="flex items-center justify-between text-xs">
+                                                <span className="text-blue-700 font-medium">
+                                                  Submitted
+                                                </span>
+                                                {userSubmission.grade ? (
+                                                  <Badge className="bg-green-500 text-white">
+                                                    <Award className="w-3 h-3 mr-1" />
+                                                    {
+                                                      userSubmission.grade
+                                                        .points
+                                                    }
+                                                    /
+                                                    {
+                                                      userSubmission.grade
+                                                        .maxPoints
+                                                    }
+                                                  </Badge>
+                                                ) : (
+                                                  <Badge
+                                                    variant="secondary"
+                                                    className="bg-yellow-500 text-white"
+                                                  >
+                                                    Pending Grade
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {userSubmission.grade
+                                                ?.feedback && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                  {
+                                                    userSubmission.grade
+                                                      .feedback
+                                                  }
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
+                                      </div>
+
+                                      {/* Actions */}
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        {item.type === "document" && (
                                           <>
-                                            {!userSubmission ? (
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 sm:h-8 text-xs bg-green-600 text-white hover:bg-green-700"
-                                                onClick={() =>
-                                                  openSubmitAssignment(
-                                                    item,
-                                                    week.weekNumber
-                                                  )
-                                                }
-                                              >
-                                                <Send className="w-3 h-3 mr-1" />
-                                                Submit
-                                              </Button>
-                                            ) : (
+                                            {isViewableFile(item.fileType) && (
                                               <Button
                                                 variant="outline"
                                                 size="sm"
                                                 className="h-7 sm:h-8 text-xs"
                                                 onClick={() =>
-                                                  openSubmitAssignment(
+                                                  viewFile(item.fileUrl)
+                                                }
+                                              >
+                                                <Eye className="w-3 h-3 mr-1" />
+                                                View
+                                              </Button>
+                                            )}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 sm:h-8 text-xs"
+                                              onClick={() =>
+                                                downloadFile(
+                                                  item.fileUrl,
+                                                  item.title
+                                                )
+                                              }
+                                            >
+                                              <Download className="w-3 h-3 mr-1" />
+                                              Download
+                                            </Button>
+                                          </>
+                                        )}
+                                        {item.type === "appointment" &&
+                                          appointmentData && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 sm:h-8 text-xs"
+                                              onClick={navigateToAppointments}
+                                            >
+                                              <ExternalLink className="w-3 h-3 mr-1" />
+                                              Manage
+                                            </Button>
+                                          )}
+                                        {item.type === "assignment" && (
+                                          <>
+                                            {((course.exchangeType ===
+                                              "mutual" &&
+                                              activeTab === "myLearning") ||
+                                              (course.exchangeType ===
+                                                "one-way" &&
+                                                isStudent)) && (
+                                              <>
+                                                {!userSubmission ? (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 sm:h-8 text-xs bg-green-600 text-white hover:bg-green-700"
+                                                    onClick={() =>
+                                                      openSubmitAssignment(
+                                                        item,
+                                                        week.weekNumber
+                                                      )
+                                                    }
+                                                  >
+                                                    <Send className="w-3 h-3 mr-1" />
+                                                    Submit
+                                                  </Button>
+                                                ) : (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 sm:h-8 text-xs"
+                                                    onClick={() =>
+                                                      openSubmitAssignment(
+                                                        item,
+                                                        week.weekNumber
+                                                      )
+                                                    }
+                                                  >
+                                                    <FileUp className="w-3 h-3 mr-1" />
+                                                    Resubmit
+                                                  </Button>
+                                                )}
+                                              </>
+                                            )}
+                                            {((course.exchangeType ===
+                                              "mutual" &&
+                                              activeTab === "myTeaching") ||
+                                              (course.exchangeType ===
+                                                "one-way" &&
+                                                isTeacher)) && (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 sm:h-8 text-xs"
+                                                onClick={() =>
+                                                  openSubmissionsDialog(
                                                     item,
                                                     week.weekNumber
                                                   )
                                                 }
                                               >
-                                                <FileUp className="w-3 h-3 mr-1" />
-                                                Resubmit
+                                                <ClipboardCheck className="w-3 h-3 mr-1" />
+                                                Submissions (
+                                                {item.assignment?.submissions
+                                                  ?.length || 0}
+                                                )
                                               </Button>
                                             )}
                                           </>
                                         )}
-                                        {((course.exchangeType === "mutual" &&
-                                          activeTab === "myTeaching") ||
-                                          (course.exchangeType === "one-way" &&
-                                            isTeacher)) && (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 sm:h-8 text-xs"
-                                            onClick={() =>
-                                              openSubmissionsDialog(
-                                                item,
-                                                week.weekNumber
-                                              )
-                                            }
-                                          >
-                                            <ClipboardCheck className="w-3 h-3 mr-1" />
-                                            Submissions (
-                                            {item.assignment?.submissions
-                                              ?.length || 0}
-                                            )
-                                          </Button>
-                                        )}
-                                      </>
-                                    )}
-                                    {(canUploadFiles || canCreateAssignments) &&
-                                      !isCoursePending && (
-                                        <Button
-                                          onClick={() => {
-                                            if (item.type === "assignment") {
-                                              deleteAssignment(
-                                                item.id,
-                                                week.weekNumber
-                                              );
-                                            } else {
-                                              deleteWeekContent(
-                                                week.weekNumber,
-                                                item.id
-                                              );
-                                            }
-                                          }}
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        >
-                                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                        </Button>
-                                      )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                        {(canUploadFiles ||
+                                          canCreateAssignments) &&
+                                          !isCoursePending && (
+                                            <Button
+                                              onClick={() => {
+                                                if (
+                                                  item.type === "assignment"
+                                                ) {
+                                                  deleteAssignment(
+                                                    item.id,
+                                                    week.weekNumber
+                                                  );
+                                                } else {
+                                                  deleteWeekContent(
+                                                    week.weekNumber,
+                                                    item.id
+                                                  );
+                                                }
+                                              }}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            >
+                                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                            </Button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12">
+                  <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No Weekly Structure Available
+                  </h3>
+                  <p className="text-gray-500">
+                    {isOneWay && isStudent
+                      ? "Your teacher hasn't set up the course content yet."
+                      : "Weekly structure will be available once the course is active."}
+                  </p>
                 </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12">
-              <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No Weekly Structure Available
-              </h3>
-              <p className="text-gray-500">
-                {isOneWay && isStudent
-                  ? "Your teacher hasn't set up the course content yet."
-                  : "Weekly structure will be available once the course is active."}
-              </p>
+              )}
             </div>
           )}
         </div>
