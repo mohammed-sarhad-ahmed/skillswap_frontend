@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "./components/ui/dialog";
 import {
   Select,
@@ -45,6 +46,11 @@ import {
   Eye,
   RotateCcw,
   ExternalLink,
+  FileCheck,
+  Award,
+  Send,
+  FileUp,
+  ClipboardCheck,
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router";
 import { getToken, getUserId } from "./ManageToken";
@@ -56,32 +62,61 @@ export default function CoursePage() {
   const [course, setCourse] = useState(null);
   const [activeTab, setActiveTab] = useState("myLearning");
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
+
+  // Dialog states
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [gradeDialogOpen, setGradeDialogOpen] = useState(false);
+  const [submissionsDialogOpen, setSubmissionsDialogOpen] = useState(false);
+  const [openAppointmentModal, setOpenAppointmentModal] = useState(false);
+
+  // Form states
   const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [newDate, setNewDate] = useState(null);
+  const [availableTimes, setAvailableTimes] = useState([]);
+  const [newTime, setNewTime] = useState("");
+
   const [uploadForm, setUploadForm] = useState({
     title: "",
     description: "",
     file: null,
     week: 1,
   });
+
   const [weekForm, setWeekForm] = useState({
     title: "",
     description: "",
     weekNumber: 1,
   });
-  const [isEditingWeek, setIsEditingWeek] = useState(false);
 
-  // Appointment booking state
-  const [openAppointmentModal, setOpenAppointmentModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [newDate, setNewDate] = useState(null);
-  const [availableTimes, setAvailableTimes] = useState([]);
-  const [newTime, setNewTime] = useState("");
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: "",
+    description: "",
+    instructions: "",
+    dueDate: "",
+    maxPoints: 100,
+  });
+
+  const [submitForm, setSubmitForm] = useState({
+    files: [],
+  });
+
+  const [gradeForm, setGradeForm] = useState({
+    points: "",
+    feedback: "",
+  });
+
   const [appointmentForm, setAppointmentForm] = useState({
     title: "",
     description: "",
   });
+
+  const [isEditingWeek, setIsEditingWeek] = useState(false);
 
   // Load course data
   useEffect(() => {
@@ -108,194 +143,141 @@ export default function CoursePage() {
     }
   };
 
-  const isCurrentUserUserA = course?.userA._id === getUserId();
+  // Helper functions
+  const isCurrentUserUserA = course?.userA?._id === getUserId();
 
-  // Get the other user in the course
   const getOtherUser = () => {
     if (!course) return null;
     return isCurrentUserUserA ? course.userB : course.userA;
   };
 
-  // Check if current user is the teacher
   const isCurrentUserTeacher = () => {
     if (!course) return false;
-
     if (course.exchangeType === "mutual") {
-      // In mutual exchange, both are teachers for their respective parts
       return activeTab === "myTeaching";
     } else {
-      // In one-way exchange, teacher is the one who did NOT check "just want to learn"
-      return course.proposedBy._id !== getUserId();
+      return course.proposedBy?._id !== getUserId();
     }
   };
 
-  // Check if current user is the student
   const isCurrentUserStudent = () => {
     if (!course) return false;
-
     if (course.exchangeType === "mutual") {
-      // In mutual exchange, both are students for their respective parts
       return activeTab === "myLearning";
     } else {
-      // In one-way exchange, student is the one who checked "just want to learn"
-      return course.proposedBy._id === getUserId();
+      return course.proposedBy?._id === getUserId();
     }
   };
 
-  // Get teacher user
   const getTeacherUser = () => {
     if (!course) return null;
-
     if (course.exchangeType === "mutual") {
-      // In mutual exchange, teacher depends on current context
       if (activeTab === "myLearning") {
-        // When learning, the other user is the teacher
         return isCurrentUserUserA ? course.userB : course.userA;
       } else {
-        // When teaching, current user is the teacher
         return isCurrentUserUserA ? course.userA : course.userB;
       }
     } else {
-      // In one-way exchange, teacher is the one who did NOT propose
-
-      const value =
-        course.proposedBy._id === course.userA._id
-          ? course.userB
-          : course.userA;
-      console.log(value);
-
-      return value;
+      return course.proposedBy?._id === course.userA?._id
+        ? course.userB
+        : course.userA;
     }
   };
 
-  // Get student user
   const getStudentUser = () => {
     if (!course) return null;
-
     if (course.exchangeType === "mutual") {
-      // In mutual exchange, student depends on current context
       if (activeTab === "myLearning") {
-        // When learning, current user is the student
         return isCurrentUserUserA ? course.userA : course.userB;
       } else {
-        // When teaching, the other user is the student
         return isCurrentUserUserA ? course.userB : course.userA;
       }
     } else {
-      // In one-way exchange, student is the one who proposed
-      return course.proposedBy._id === course.userA._id
+      return course.proposedBy?._id === course.userA?._id
         ? course.userA
         : course.userB;
     }
   };
 
-  // FIXED: Determine which weekly structure to show based on active tab
   const getCurrentWeeklyStructure = () => {
     if (!course) return [];
-
     let existingStructure = [];
 
     if (course.exchangeType === "mutual") {
-      // FIXED: Corrected the logic for mutual exchange
-      // - Learning tab: show userAWeeklyStructure when userB is learning (and vice versa)
-      // - Teaching tab: show userAWeeklyStructure when userA is teaching (and vice versa)
       if (activeTab === "myLearning") {
-        // When user is learning, they see the OTHER user's structure
         existingStructure = isCurrentUserUserA
-          ? course.userBWeeklyStructure // UserA learns from UserB's structure
-          : course.userAWeeklyStructure; // UserB learns from UserA's structure
+          ? course.userBWeeklyStructure || []
+          : course.userAWeeklyStructure || [];
       } else {
-        // When user is teaching, they see their OWN structure
         existingStructure = isCurrentUserUserA
-          ? course.userAWeeklyStructure // UserA teaches their own structure
-          : course.userBWeeklyStructure; // UserB teaches their own structure
+          ? course.userAWeeklyStructure || []
+          : course.userBWeeklyStructure || [];
       }
     } else {
-      // One-way exchange:
-      // - Teacher sees their own structure (what they're teaching)
-      // - Student sees teacher's structure (what they're learning)
       if (isCurrentUserTeacher()) {
         existingStructure = isCurrentUserUserA
-          ? course.userAWeeklyStructure
-          : course.userBWeeklyStructure;
+          ? course.userAWeeklyStructure || []
+          : course.userBWeeklyStructure || [];
       } else {
         existingStructure = isCurrentUserUserA
-          ? course.userBWeeklyStructure
-          : course.userAWeeklyStructure;
+          ? course.userBWeeklyStructure || []
+          : course.userAWeeklyStructure || [];
       }
-    }
-
-    // If the structure is empty (can happen in one-way for student), return empty array
-    if (!existingStructure || existingStructure.length === 0) {
-      return [];
     }
 
     return existingStructure;
   };
 
-  // Get the teaching skill for current context
   const getTeachingSkill = () => {
     if (!course) return "";
-
     if (course.exchangeType === "mutual") {
       if (activeTab === "myLearning") {
-        // When learning, show what the other user is teaching you
         return isCurrentUserUserA
-          ? course.userBTeaching.skill
-          : course.userATeaching.skill;
+          ? course.userBTeaching?.skill || ""
+          : course.userATeaching?.skill || "";
       } else {
-        // When teaching, show what you are teaching
         return isCurrentUserUserA
-          ? course.userATeaching.skill
-          : course.userBTeaching.skill;
+          ? course.userATeaching?.skill || ""
+          : course.userBTeaching?.skill || "";
       }
     } else {
-      // One-way exchange: always show what the teacher is teaching
       return isCurrentUserTeacher()
         ? isCurrentUserUserA
-          ? course.userATeaching.skill
-          : course.userBTeaching.skill
+          ? course.userATeaching?.skill || ""
+          : course.userBTeaching?.skill || ""
         : isCurrentUserUserA
-        ? course.userBTeaching.skill
-        : course.userATeaching.skill;
+        ? course.userBTeaching?.skill || ""
+        : course.userATeaching?.skill || "";
     }
   };
 
-  // FIXED: Get progress for current context - CORRECTED LOGIC
   const getCurrentProgress = () => {
     if (!course) return 0;
-
     if (course.exchangeType === "mutual") {
-      // FIXED: Corrected progress logic for mutual exchange
       if (activeTab === "myLearning") {
-        // Learning progress: userA sees userA progress, userB sees userB progress
         return isCurrentUserUserA
-          ? course.progress.userA // UserA's learning progress
-          : course.progress.userB; // UserB's learning progress
+          ? course.progress?.userA || 0
+          : course.progress?.userB || 0;
       } else {
-        // Teaching progress: userA sees userB progress (how much userB has learned from userA), userB sees userA progress
         return isCurrentUserUserA
-          ? course.progress.userB // How much userB has learned from userA (userA's teaching effectiveness)
-          : course.progress.userA; // How much userA has learned from userB (userB's teaching effectiveness)
+          ? course.progress?.userB || 0
+          : course.progress?.userA || 0;
       }
     } else {
-      // One-way exchange: student sees their learning progress, teacher sees teaching progress
       if (isCurrentUserStudent()) {
         return isCurrentUserUserA
-          ? course.progress.userA
-          : course.progress.userB;
+          ? course.progress?.userA || 0
+          : course.progress?.userB || 0;
       } else {
         return isCurrentUserUserA
-          ? course.progress.userB
-          : course.progress.userA;
+          ? course.progress?.userB || 0
+          : course.progress?.userA || 0;
       }
     }
   };
 
-  // Get progress label for current context
   const getProgressLabel = () => {
     if (!course) return "";
-
     if (course.exchangeType === "mutual") {
       return activeTab === "myLearning"
         ? "Learning Progress"
@@ -305,63 +287,45 @@ export default function CoursePage() {
     }
   };
 
-  // Get role description for one-way exchange
   const getRoleDescription = () => {
     if (!course || course.exchangeType !== "one-way") return "";
-
     const teacherUser = getTeacherUser();
     const studentUser = getStudentUser();
-
     if (isCurrentUserTeacher()) {
       return `You are teaching ${getTeachingSkill()} to ${
-        studentUser?.fullName
+        studentUser?.fullName || "your student"
       }`;
     } else {
       return `You are learning ${getTeachingSkill()} from ${
-        teacherUser?.fullName
+        teacherUser?.fullName || "your teacher"
       }`;
     }
   };
 
-  // Calculate course end date based on start date and duration
   const getCourseEndDate = () => {
     if (!course?.startDate) return null;
     const startDate = new Date(course.startDate);
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + course.duration * 7);
+    endDate.setDate(startDate.getDate() + (course.duration || 0) * 7);
     return endDate;
   };
 
-  // NEW: Calculate which week a date falls into
   const getWeekForDate = (date) => {
     if (!course?.startDate) return 1;
-
     const startDate = new Date(course.startDate);
     const appointmentDate = new Date(date);
-
-    // Calculate difference in days
     const diffTime = appointmentDate - startDate;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    // Calculate week number (1-based)
     const weekNumber = Math.ceil(diffDays / 7);
-
-    // Ensure week number is within course duration
-    return Math.max(1, Math.min(weekNumber, course.duration));
+    return Math.max(1, Math.min(weekNumber, course.duration || 1));
   };
 
-  // FIXED: Filter appointments to show only relevant ones based on current user role
   const filterAppointmentsForCurrentContext = (weekContent) => {
     if (!weekContent || !course) return weekContent;
-
     const currentUserId = getUserId();
-
     return weekContent.filter((item) => {
       if (item.type !== "appointment") return true;
-
       const appointmentData = getAppointmentDisplayData(item);
-
-      // If we can't get proper appointment data, show it (fallback)
       if (
         !appointmentData ||
         !appointmentData.teacher ||
@@ -369,32 +333,25 @@ export default function CoursePage() {
       ) {
         return true;
       }
-
-      // For mutual exchange
       if (course.exchangeType === "mutual") {
         if (activeTab === "myLearning") {
-          // In learning tab: show appointments where current user is student
           return (
             appointmentData.student._id === currentUserId ||
             appointmentData.student === currentUserId
           );
         } else {
-          // In teaching tab: show appointments where current user is teacher
           return (
             appointmentData.teacher._id === currentUserId ||
             appointmentData.teacher === currentUserId
           );
         }
       } else {
-        // For one-way exchange
         if (isCurrentUserStudent()) {
-          // Student sees appointments where they are student
           return (
             appointmentData.student._id === currentUserId ||
             appointmentData.student === currentUserId
           );
         } else {
-          // Teacher sees appointments where they are teacher
           return (
             appointmentData.teacher._id === currentUserId ||
             appointmentData.teacher === currentUserId
@@ -404,10 +361,8 @@ export default function CoursePage() {
     });
   };
 
-  // FIXED: Format date and time properly for display
   const formatAppointmentDateTime = (dateString, timeString) => {
     try {
-      // Parse the date (handling both YYYY-MM-DD and ISO string)
       let date;
       if (dateString.includes("T")) {
         date = new Date(dateString);
@@ -415,15 +370,11 @@ export default function CoursePage() {
         const [year, month, day] = dateString.split("-");
         date = new Date(year, month - 1, day);
       }
-
-      // Format date as local date
       const formattedDate = date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
       });
-
-      // Format time (assuming HH:MM format)
       let formattedTime = timeString;
       if (timeString && timeString.includes(":")) {
         const [hours, minutes] = timeString.split(":");
@@ -432,23 +383,336 @@ export default function CoursePage() {
         const displayHour = hour % 12 || 12;
         formattedTime = `${displayHour}:${minutes.padStart(2, "0")} ${ampm}`;
       }
-
       return `${formattedDate} • ${formattedTime}`;
     } catch (error) {
-      console.error("Error formatting date/time:", error);
       return `${dateString} • ${timeString}`;
     }
   };
 
-  // Appointment booking functions
+  // Assignment Functions
+  const openCreateAssignment = () => {
+    // Calculate course end date for max due date
+    const courseEndDate = getCourseEndDate();
+    const maxDueDate = courseEndDate
+      ? courseEndDate.toISOString().split("T")[0]
+      : "";
+
+    // Calculate default due date (1 week from now or course end date, whichever is sooner)
+    const oneWeekFromNow = new Date();
+    oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+    const defaultDueDate =
+      courseEndDate && oneWeekFromNow > courseEndDate
+        ? courseEndDate.toISOString().split("T")[0]
+        : oneWeekFromNow.toISOString().split("T")[0];
+
+    setAssignmentForm({
+      title: "",
+      description: "",
+      instructions: "",
+      dueDate: defaultDueDate,
+      maxPoints: 100,
+    });
+    setAssignmentDialogOpen(true);
+  };
+
+  const handleCreateAssignment = async (e) => {
+    e.preventDefault();
+    if (!assignmentForm.title) {
+      toast.error("Assignment title is required");
+      return;
+    }
+
+    // Validate due date is not after course end date
+    const courseEndDate = getCourseEndDate();
+    if (assignmentForm.dueDate && courseEndDate) {
+      const dueDate = new Date(assignmentForm.dueDate);
+      if (dueDate > courseEndDate) {
+        toast.error("Due date cannot be after the course end date");
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/assignments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+          body: JSON.stringify(assignmentForm),
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to create assignment");
+
+      toast.success(
+        `Assignment created successfully! It will appear in Week ${data.data.week}`
+      );
+      setAssignmentDialogOpen(false);
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const openSubmitAssignment = (assignment, weekNumber) => {
+    setSelectedAssignment(assignment);
+    setSelectedWeek(weekNumber);
+    setSubmitForm({ files: [] });
+    setSubmitDialogOpen(true);
+  };
+
+  const handleSubmitAssignment = async (e) => {
+    e.preventDefault();
+    if (submitForm.files.length === 0) {
+      toast.error("Please select at least one file");
+      return;
+    }
+
+    try {
+      let structureType;
+      if (course.exchangeType === "mutual") {
+        structureType =
+          activeTab === "myLearning"
+            ? isCurrentUserUserA
+              ? "userB"
+              : "userA"
+            : isCurrentUserUserA
+            ? "userA"
+            : "userB";
+      } else {
+        structureType = isCurrentUserStudent()
+          ? isCurrentUserUserA
+            ? "userB"
+            : "userA"
+          : isCurrentUserUserA
+          ? "userA"
+          : "userB";
+      }
+
+      const formData = new FormData();
+      submitForm.files.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${selectedWeek}/${structureType}/assignments/${selectedAssignment?.id}/submit`,
+        {
+          method: "POST",
+          headers: { auth: getToken() },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to submit assignment");
+
+      toast.success("Assignment submitted successfully!");
+      setSubmitDialogOpen(false);
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const openGradeAssignment = (submission, assignment, weekNumber) => {
+    setSelectedSubmission(submission);
+    setSelectedAssignment(assignment);
+    setSelectedWeek(weekNumber);
+    setGradeForm({
+      points: submission.grade?.points || "",
+      feedback: submission.grade?.feedback || "",
+    });
+    setGradeDialogOpen(true);
+  };
+
+  const handleGradeAssignment = async (e) => {
+    e.preventDefault();
+    if (!gradeForm.points) {
+      toast.error("Points are required");
+      return;
+    }
+
+    try {
+      let structureType;
+      if (course.exchangeType === "mutual") {
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      } else {
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      }
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${selectedWeek}/${structureType}/assignments/${selectedAssignment?.id}/grade/${selectedSubmission?.studentId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            auth: getToken(),
+          },
+          body: JSON.stringify(gradeForm),
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to grade assignment");
+
+      toast.success("Assignment graded successfully!");
+      setGradeDialogOpen(false);
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const openSubmissionsDialog = (assignment, weekNumber) => {
+    setSelectedAssignment(assignment);
+    setSelectedWeek(weekNumber);
+    setSubmissionsDialogOpen(true);
+  };
+
+  const deleteAssignment = async (assignmentId, weekNumber) => {
+    try {
+      let structureType;
+      if (course.exchangeType === "mutual") {
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      } else {
+        structureType = isCurrentUserUserA ? "userA" : "userB";
+      }
+
+      const res = await fetch(
+        `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/assignments/${assignmentId}`,
+        {
+          method: "DELETE",
+          headers: { auth: getToken() },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to delete assignment");
+
+      toast.success("Assignment deleted successfully!");
+      fetchCourseDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const hasUserSubmitted = (assignment) => {
+    if (!assignment?.assignment?.submissions) return false;
+    const userId = getUserId();
+    return assignment.assignment.submissions.some(
+      (sub) => sub.studentId === userId || sub.studentId?._id === userId
+    );
+  };
+
+  const getUserSubmission = (assignment) => {
+    if (!assignment?.assignment?.submissions) return null;
+    const userId = getUserId();
+    return assignment.assignment.submissions.find(
+      (sub) => sub.studentId === userId || sub.studentId?._id === userId
+    );
+  };
+
+  // File handling functions
+  const getFileIcon = (fileType, type) => {
+    if (type === "appointment") {
+      return <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />;
+    }
+    if (type === "assignment") {
+      return <FileCheck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />;
+    }
+    switch (fileType) {
+      case "pdf":
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />;
+      case "doc":
+      case "docx":
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />;
+      case "jpg":
+      case "png":
+      case "gif":
+        return <Image className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />;
+      default:
+        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />;
+    }
+  };
+
+  const downloadFile = async (fileUrl, fileName) => {
+    try {
+      const fullUrl = fileUrl.startsWith("http")
+        ? fileUrl
+        : `${API_BASE_URL}${fileUrl}`;
+      const response = await fetch(fullUrl, { headers: { auth: getToken() } });
+      if (!response.ok) throw new Error("Failed to download file");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const filename = fileName || fileUrl.split("/").pop() || "download";
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success("File download started!");
+    } catch (err) {
+      const fullUrl = fileUrl.startsWith("http")
+        ? fileUrl
+        : `${API_BASE_URL}${fileUrl}`;
+      window.open(fullUrl, "_blank");
+    }
+  };
+
+  const viewFile = (fileUrl) => {
+    const fullUrl = fileUrl.startsWith("http")
+      ? fileUrl
+      : `${API_BASE_URL}${fileUrl}`;
+    window.open(fullUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const isViewableFile = (fileType) => {
+    const viewableTypes = ["pdf", "jpg", "jpeg", "png", "gif", "webp"];
+    return viewableTypes.includes(fileType?.toLowerCase());
+  };
+
+  const getAppointmentDisplayData = (item) => {
+    if (item.appointmentId && typeof item.appointmentId === "object") {
+      return {
+        title: item.appointmentId.title,
+        date: item.appointmentId.date,
+        time: item.appointmentId.time,
+        status: item.appointmentId.status,
+        teacher: item.appointmentId.teacher,
+        student: item.appointmentId.student,
+        description: item.appointmentId.description,
+      };
+    }
+    return {
+      title: item.title || "Appointment",
+      date: item.date,
+      time: item.time,
+      status: item.status,
+      teacher: item.teacher,
+      student: item.student,
+      description: item.description,
+    };
+  };
+
+  // Appointment functions
   const getWeekday = (date) =>
     date.toLocaleDateString("en-US", { weekday: "long" });
 
   const generateTimeSlots = (start, end) => {
+    if (!start || !end) return [];
     const times = [];
     let [h, m] = start.split(":").map(Number);
     let [endH, endM] = end.split(":").map(Number);
-
     while (h < endH || (h === endH && m < endM)) {
       times.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
       m += 1;
@@ -457,24 +721,16 @@ export default function CoursePage() {
         m -= 60;
       }
     }
-
     return times;
   };
 
-  // FIXED: Enhanced date disabling logic
   const isDateDisabled = (date) => {
     if (!selectedUser || !selectedUser.availability) return true;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // Disable dates before today
     if (date < today) return true;
-
-    // Disable dates after course end date
     const courseEndDate = getCourseEndDate();
     if (courseEndDate && date > courseEndDate) return true;
-
     const weekday = getWeekday(date);
     const dayData = selectedUser.availability[weekday];
     return !dayData || dayData.off;
@@ -483,16 +739,13 @@ export default function CoursePage() {
   const handleDateSelect = (date) => {
     if (isDateDisabled(date)) return;
     setNewDate(date);
-
     const weekday = getWeekday(date);
     const dayData = selectedUser.availability[weekday];
     if (!dayData || dayData.off) {
       setAvailableTimes([]);
       return;
     }
-
     let times = generateTimeSlots(dayData.start, dayData.end);
-
     const now = new Date();
     if (date.toDateString() === now.toDateString()) {
       const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
@@ -500,67 +753,45 @@ export default function CoursePage() {
       ).padStart(2, "0")}`;
       times = times.filter((t) => t > currentTime);
     }
-
     setAvailableTimes(times);
-
-    // Auto-select the week based on the chosen date
     const calculatedWeek = getWeekForDate(date);
     setSelectedWeek(calculatedWeek);
   };
 
-  // Open appointment booking modal with correct roles
   const openAppointmentBookingModal = async () => {
     const otherUser = getOtherUser();
     if (!otherUser) return;
-
     try {
       const res = await fetch(
         `${API_BASE_URL}/courses/user/${otherUser._id}/availability`,
-        {
-          headers: { auth: getToken() },
-        }
+        { headers: { auth: getToken() } }
       );
       const data = await res.json();
-
       if (!res.ok)
         throw new Error(data.message || "Failed to fetch availability");
-
       setSelectedUser(data.data.user);
       setNewDate(null);
       setNewTime("");
       setAvailableTimes([]);
-
-      // Set appointment title based on current role
       const isLearningTab = activeTab === "myLearning";
       const defaultTitle = isLearningTab
         ? `Learning Session - Week ${selectedWeek}`
         : `Teaching Session - Week ${selectedWeek}`;
-
-      setAppointmentForm({
-        title: defaultTitle,
-        description: "",
-      });
+      setAppointmentForm({ title: defaultTitle, description: "" });
       setOpenAppointmentModal(true);
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  // FIXED: Handle appointment booking with correct week assignment
   const handleBookAppointment = async () => {
     if (!newDate || !newTime || !appointmentForm.title) {
       toast.error("Select a date, time, and provide a title");
       return;
     }
-
     try {
-      // Determine who is teacher and who is student based on current tab
       let teacherId, studentId;
-
       if (course.exchangeType === "mutual") {
-        // In mutual exchange:
-        // - Learning tab: other user is teacher, current user is student
-        // - Teaching tab: current user is teacher, other user is student
         if (activeTab === "myLearning") {
           teacherId = getOtherUser()._id;
           studentId = getUserId();
@@ -572,17 +803,7 @@ export default function CoursePage() {
         teacherId = getTeacherUser()._id;
         studentId = getStudentUser()._id;
       }
-
-      // Calculate the correct week based on the selected date
       const calculatedWeek = getWeekForDate(newDate);
-
-      console.log("Booking appointment:", {
-        date: newDate,
-        calculatedWeek,
-        courseDuration: course.duration,
-      });
-
-      // Step 1: Create the appointment (will be in "pending" status)
       const appointmentRes = await fetch(`${API_BASE_URL}/appointments`, {
         method: "POST",
         headers: {
@@ -600,14 +821,11 @@ export default function CoursePage() {
           week: calculatedWeek,
         }),
       });
-
       const appointmentData = await appointmentRes.json();
       if (!appointmentRes.ok)
         throw new Error(
           appointmentData.message || "Failed to book appointment"
         );
-
-      // Step 2: Add appointment to course week (but only show as pending)
       const courseRes = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${calculatedWeek}/appointments`,
         {
@@ -622,62 +840,24 @@ export default function CoursePage() {
           }),
         }
       );
-
       if (!courseRes.ok) {
         const courseData = await courseRes.json();
         throw new Error(
           courseData.message || "Failed to add appointment to course"
         );
       }
-
       toast.success("Appointment proposal sent! Waiting for acceptance.");
       setOpenAppointmentModal(false);
       setNewDate(null);
       setNewTime("");
       setAppointmentForm({ title: "", description: "" });
-      fetchCourseDetails(); // Refresh course data
+      fetchCourseDetails();
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  // Add this function to cancel pending appointments
-  const cancelAppointment = async (appointmentId, weekNumber, contentId) => {
-    try {
-      // Update appointment status to cancelled
-      const appointmentRes = await fetch(
-        `${API_BASE_URL}/appointments/${appointmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            auth: getToken(),
-          },
-          body: JSON.stringify({
-            status: "canceled",
-          }),
-        }
-      );
-
-      if (!appointmentRes.ok) {
-        const data = await appointmentRes.json();
-        throw new Error(data.message || "Failed to cancel appointment");
-      }
-
-      // Remove appointment from course content
-      await deleteWeekContent(weekNumber, contentId);
-
-      toast.success("Appointment cancelled successfully!");
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  // NEW: Navigate to appointments page
-  const navigateToAppointments = () => {
-    navigate("/appointments");
-  };
-
+  // Week management functions
   const toggleWeek = (weekNumber) => {
     const newExpanded = new Set(expandedWeeks);
     if (newExpanded.has(weekNumber)) {
@@ -688,84 +868,52 @@ export default function CoursePage() {
     setExpandedWeeks(newExpanded);
   };
 
-  // Enhanced file upload function with better error handling
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-
     if (!uploadForm.file) {
       toast.error("Please select a file");
       return;
     }
-
-    // Check file size (10MB limit)
     if (uploadForm.file.size > 10 * 1024 * 1024) {
       toast.error("File size must be less than 10MB");
       return;
     }
-
-    // FIXED: Determine correct structure type based on context
     let structureType;
     if (course.exchangeType === "mutual") {
-      // FIXED: Corrected structure type logic
       if (activeTab === "myTeaching") {
-        // When teaching, upload to your own structure
         structureType = isCurrentUserUserA ? "userA" : "userB";
       } else {
-        // When learning, upload to the other user's structure (for them to see your submissions)
         structureType = isCurrentUserUserA ? "userB" : "userA";
       }
     } else {
-      // One-way exchange
       if (isCurrentUserTeacher()) {
         structureType = isCurrentUserUserA ? "userA" : "userB";
       } else {
         structureType = isCurrentUserUserA ? "userB" : "userA";
       }
     }
-
     const formData = new FormData();
     formData.append("file", uploadForm.file);
     formData.append("title", uploadForm.title);
     formData.append("description", uploadForm.description);
-
     try {
-      console.log("Uploading file:", {
-        week: uploadForm.week,
-        structureType,
-        fileName: uploadForm.file.name,
-      });
-
       const res = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${uploadForm.week}/${structureType}/upload`,
-        {
-          method: "POST",
-          headers: {
-            auth: getToken(),
-          },
-          body: formData,
-        }
+        { method: "POST", headers: { auth: getToken() }, body: formData }
       );
-
       const data = await res.json();
-
-      if (!res.ok) {
-        console.error("Upload failed:", data);
-        throw new Error(data.message || "Failed to upload file");
-      }
-
+      if (!res.ok) throw new Error(data.message || "Failed to upload file");
       toast.success("File uploaded successfully!");
       setUploadDialogOpen(false);
       setUploadForm({ title: "", description: "", file: null, week: 1 });
       fetchCourseDetails();
     } catch (err) {
-      console.error("Upload error:", err);
       toast.error(err.message);
     }
   };
 
   const handleWeekSubmit = async (e) => {
     e.preventDefault();
-
     try {
       const structureType = isCurrentUserUserA ? "userA" : "userB";
       const res = await fetch(
@@ -782,10 +930,8 @@ export default function CoursePage() {
           }),
         }
       );
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update week");
-
       toast.success(
         isEditingWeek
           ? "Week updated successfully!"
@@ -800,176 +946,79 @@ export default function CoursePage() {
     }
   };
 
-  const getFileIcon = (fileType, type) => {
-    if (type === "appointment") {
-      return <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />;
-    }
-
-    switch (fileType) {
-      case "pdf":
-        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />;
-      case "doc":
-      case "docx":
-        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />;
-      case "jpg":
-      case "png":
-      case "gif":
-        return <Image className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />;
-      default:
-        return <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />;
-    }
-  };
-
-  // FIXED: MARK WEEK AS COMPLETE - CORRECT LOGIC
   const markWeekComplete = async (weekNumber) => {
     try {
       let structureType;
-      let progressType;
-
       if (course.exchangeType === "mutual") {
         if (activeTab === "myLearning") {
-          // When in Learning tab: mark the OTHER user's structure as complete
-          // This increases YOUR learning progress and THEIR teaching progress
           structureType = isCurrentUserUserA ? "userB" : "userA";
-          progressType = "learning"; // For current user
         } else {
-          // When in Teaching tab: mark YOUR OWN structure as complete
-          // This increases YOUR teaching progress (when student marks it complete)
           structureType = isCurrentUserUserA ? "userA" : "userB";
-          progressType = "teaching"; // For current user
         }
       } else {
-        // One-way exchange
         if (isCurrentUserStudent()) {
-          // Student marks teacher's structure as complete
-          // Increases student's learning progress and teacher's teaching progress
           structureType = isCurrentUserUserA ? "userB" : "userA";
-          progressType = "learning";
         } else {
-          // Teacher marks their own structure as complete
-          // Increases teacher's teaching progress (when student marks it)
           structureType = isCurrentUserUserA ? "userA" : "userB";
-          progressType = "teaching";
         }
       }
-
-      console.log("Marking week complete:", {
-        courseId,
-        weekNumber,
-        structureType,
-        progressType,
-        isCurrentUserUserA,
-        activeTab,
-        context:
-          course.exchangeType === "mutual"
-            ? activeTab === "myLearning"
-              ? "Learning"
-              : "Teaching"
-            : isCurrentUserStudent()
-            ? "Learning"
-            : "Teaching",
-      });
-
       const res = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/complete`,
         {
           method: "PATCH",
-          headers: {
-            auth: getToken(),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            progressType: progressType,
-            userId: getUserId(),
-          }),
+          headers: { auth: getToken(), "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: getUserId() }),
         }
       );
-
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok)
         throw new Error(data.message || "Failed to mark week as complete");
-      }
-
       toast.success(`Week ${weekNumber} marked as complete!`);
       fetchCourseDetails();
     } catch (err) {
-      console.error("Mark week complete error:", err);
       toast.error(err.message);
     }
   };
 
-  // FIXED: UNDO WEEK COMPLETE - CORRECT LOGIC
   const unmarkWeekComplete = async (weekNumber) => {
     try {
       let structureType;
-      let progressType;
-
       if (course.exchangeType === "mutual") {
         if (activeTab === "myLearning") {
           structureType = isCurrentUserUserA ? "userB" : "userA";
-          progressType = "learning";
         } else {
           structureType = isCurrentUserUserA ? "userA" : "userB";
-          progressType = "teaching";
         }
       } else {
         if (isCurrentUserStudent()) {
           structureType = isCurrentUserUserA ? "userB" : "userA";
-          progressType = "learning";
         } else {
           structureType = isCurrentUserUserA ? "userA" : "userB";
-          progressType = "teaching";
         }
       }
-
-      console.log("Unmarking week complete:", {
-        courseId,
-        weekNumber,
-        structureType,
-        progressType,
-        context:
-          course.exchangeType === "mutual"
-            ? activeTab === "myLearning"
-              ? "Learning"
-              : "Teaching"
-            : isCurrentUserStudent()
-            ? "Learning"
-            : "Teaching",
-      });
-
       const res = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/incomplete`,
         {
           method: "PATCH",
-          headers: {
-            auth: getToken(),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            progressType: progressType,
-            userId: getUserId(),
-          }),
+          headers: { auth: getToken(), "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: getUserId() }),
         }
       );
-
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok)
         throw new Error(data.message || "Failed to unmark week as complete");
-      }
-
       toast.success(`Week ${weekNumber} marked as incomplete!`);
       fetchCourseDetails();
     } catch (err) {
-      console.error("Unmark week complete error:", err);
       toast.error(err.message);
     }
   };
 
   const editWeek = (week) => {
     setWeekForm({
-      title: week.title,
-      description: week.description,
-      weekNumber: week.weekNumber,
+      title: week.title || "",
+      description: week.description || "",
+      weekNumber: week.weekNumber || 1,
     });
     setIsEditingWeek(true);
     setWeekDialogOpen(true);
@@ -980,15 +1029,10 @@ export default function CoursePage() {
       const structureType = isCurrentUserUserA ? "userA" : "userB";
       const res = await fetch(
         `${API_BASE_URL}/courses/${courseId}/weeks/${weekNumber}/${structureType}/content/${contentId}`,
-        {
-          method: "DELETE",
-          headers: { auth: getToken() },
-        }
+        { method: "DELETE", headers: { auth: getToken() } }
       );
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to delete content");
-
       toast.success("Content deleted successfully!");
       fetchCourseDetails();
     } catch (err) {
@@ -996,101 +1040,8 @@ export default function CoursePage() {
     }
   };
 
-  // Enhanced download function that forces immediate download
-  const downloadFile = async (fileUrl, fileName) => {
-    try {
-      const fullUrl = fileUrl.startsWith("http")
-        ? fileUrl
-        : `${API_BASE_URL}${fileUrl}`;
-
-      console.log("Downloading file from:", fullUrl);
-
-      // Fetch the file as a blob
-      const response = await fetch(fullUrl, {
-        headers: {
-          auth: getToken(),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to download file");
-      }
-
-      // Convert response to blob
-      const blob = await response.blob();
-
-      // Create a temporary URL for the blob
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      // Create a temporary anchor element to trigger download
-      const link = document.createElement("a");
-      link.href = blobUrl;
-
-      // Extract filename from URL or use provided filename
-      const filename = fileName || fileUrl.split("/").pop() || "download";
-      link.download = filename;
-
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Clean up the blob URL
-      window.URL.revokeObjectURL(blobUrl);
-
-      toast.success("File download started!");
-    } catch (err) {
-      console.error("Download error:", err);
-      toast.error("Failed to download file");
-
-      // Fallback: open in new tab if download fails
-      const fullUrl = fileUrl.startsWith("http")
-        ? fileUrl
-        : `${API_BASE_URL}${fileUrl}`;
-      window.open(fullUrl, "_blank");
-    }
-  };
-
-  // View file function - opens in new tab for preview
-  const viewFile = (fileUrl) => {
-    const fullUrl = fileUrl.startsWith("http")
-      ? fileUrl
-      : `${API_BASE_URL}${fileUrl}`;
-    console.log("Viewing file:", fullUrl);
-    // Open in new tab for viewing/preview
-    window.open(fullUrl, "_blank", "noopener,noreferrer");
-  };
-
-  // Check if file is viewable in browser (images, PDFs)
-  const isViewableFile = (fileType) => {
-    const viewableTypes = ["pdf", "jpg", "jpeg", "png", "gif", "webp"];
-    return viewableTypes.includes(fileType?.toLowerCase());
-  };
-
-  // FIXED: Get appointment display data - handles both old and new structure properly
-  const getAppointmentDisplayData = (item) => {
-    // If appointmentId is populated (new structure)
-    if (item.appointmentId && typeof item.appointmentId === "object") {
-      return {
-        title: item.appointmentId.title,
-        date: item.appointmentId.date,
-        time: item.appointmentId.time,
-        status: item.appointmentId.status,
-        teacher: item.appointmentId.teacher,
-        student: item.appointmentId.student,
-        description: item.appointmentId.description,
-      };
-    }
-    // If using old structure (fallback) or if appointmentId is not properly populated
-    return {
-      title: item.title || "Appointment",
-      date: item.date,
-      time: item.time,
-      status: item.status,
-      teacher: item.teacher,
-      student: item.student,
-      description: item.description,
-    };
+  const navigateToAppointments = () => {
+    navigate("/appointments");
   };
 
   if (!course) {
@@ -1109,30 +1060,23 @@ export default function CoursePage() {
   const otherUser = getOtherUser();
   const teacherUser = getTeacherUser();
   const studentUser = getStudentUser();
-
-  // Check if course is pending
   const isCoursePending = course.status === "pending";
-
-  // Check if current user can make appointments (both users can make appointments with each other)
   const canMakeAppointments =
     otherUser && getUserId() !== otherUser._id && !isCoursePending;
-
-  // For one-way exchange, determine roles
   const isOneWay = course.exchangeType === "one-way";
   const isTeacher = isCurrentUserTeacher();
   const isStudent = isCurrentUserStudent();
-
-  // Determine if user can upload files
   const canUploadFiles =
     (isOneWay && isTeacher) || (!isOneWay && activeTab === "myTeaching");
-
-  // Check if current structure has any weeks to display
+  const canCreateAssignments =
+    (course.exchangeType === "mutual" && activeTab === "myTeaching") ||
+    (course.exchangeType === "one-way" && isTeacher);
   const hasWeeklyStructure =
     currentWeeklyStructure && currentWeeklyStructure.length > 0;
 
   return (
     <>
-      {/* FIXED: Modern Header - Made Responsive */}
+      {/* Header Section */}
       <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white">
         <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
           <div className="flex flex-col xl:flex-row gap-4 lg:gap-6 xl:gap-8">
@@ -1142,23 +1086,23 @@ export default function CoursePage() {
                   variant="secondary"
                   className="bg-white/20 text-white border-0 text-xs px-2 py-1"
                 >
-                  {course.duration} {course.duration === 1 ? "week" : "weeks"}
+                  {course.duration || 0}{" "}
+                  {course.duration === 1 ? "week" : "weeks"}
                 </Badge>
                 <Badge
                   variant="secondary"
-                  className={`
-                    text-xs px-2 py-1
-                    ${
-                      course.status === "active"
-                        ? "bg-green-500"
-                        : course.status === "pending"
-                        ? "bg-yellow-500"
-                        : "bg-gray-500"
-                    } text-white border-0
-                  `}
+                  className={`text-xs px-2 py-1 ${
+                    course.status === "active"
+                      ? "bg-green-500"
+                      : course.status === "pending"
+                      ? "bg-yellow-500"
+                      : "bg-gray-500"
+                  } text-white border-0`}
                 >
-                  {course.status.charAt(0).toUpperCase() +
-                    course.status.slice(1)}
+                  {course.status
+                    ? course.status.charAt(0).toUpperCase() +
+                      course.status.slice(1)
+                    : "Unknown"}
                 </Badge>
                 <Badge
                   variant="secondary"
@@ -1181,16 +1125,14 @@ export default function CoursePage() {
               </div>
 
               <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold mb-2 sm:mb-3 leading-tight break-words">
-                {course.title}
+                {course.title || "Untitled Course"}
               </h1>
               <p className="text-blue-100 text-sm sm:text-base lg:text-lg xl:text-xl max-w-4xl leading-relaxed break-words">
-                {course.description}
+                {course.description || "No description provided"}
               </p>
 
-              {/* Exchange Details - Made Responsive */}
               <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 lg:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
                 {isOneWay ? (
-                  // One-Way Exchange Layout
                   <>
                     <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <GraduationCap className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-green-300" />
@@ -1198,7 +1140,9 @@ export default function CoursePage() {
                         <div className="font-semibold text-green-300">
                           Teacher
                         </div>
-                        <div className="truncate">{teacherUser?.fullName}</div>
+                        <div className="truncate">
+                          {teacherUser?.fullName || "Unknown"}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
@@ -1207,21 +1151,22 @@ export default function CoursePage() {
                         <div className="font-semibold text-blue-300">
                           Student
                         </div>
-                        <div className="truncate">{studentUser?.fullName}</div>
+                        <div className="truncate">
+                          {studentUser?.fullName || "Unknown"}
+                        </div>
                       </div>
                     </div>
                   </>
                 ) : (
-                  // Mutual Exchange Layout
                   <>
                     <div className="flex items-center gap-1 sm:gap-2 min-w-0 bg-white/10 rounded-lg p-2 sm:p-3 flex-1 sm:flex-none">
                       <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                       <div className="min-w-0">
                         <div className="font-semibold">
-                          {course.userA.fullName}
+                          {course.userA?.fullName || "User A"}
                         </div>
                         <div className="truncate text-blue-100">
-                          {course.userATeaching.skill}
+                          {course.userATeaching?.skill || "No skill"}
                         </div>
                       </div>
                     </div>
@@ -1229,10 +1174,10 @@ export default function CoursePage() {
                       <User className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                       <div className="min-w-0">
                         <div className="font-semibold">
-                          {course.userB.fullName}
+                          {course.userB?.fullName || "User B"}
                         </div>
                         <div className="truncate text-blue-100">
-                          {course.userBTeaching.skill}
+                          {course.userBTeaching?.skill || "No skill"}
                         </div>
                       </div>
                     </div>
@@ -1252,19 +1197,15 @@ export default function CoursePage() {
                 )}
               </div>
 
-              {/* One-Way Role Indicator */}
               {isOneWay && (
                 <div className="mt-3 sm:mt-4">
                   <Badge
                     variant="secondary"
-                    className={`
-                      text-xs px-3 py-1.5 border-0
-                      ${
-                        isTeacher
-                          ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                          : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                      }
-                    `}
+                    className={`text-xs px-3 py-1.5 border-0 ${
+                      isTeacher
+                        ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                        : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                    }`}
                   >
                     <div className="flex items-center gap-1.5">
                       {isTeacher ? (
@@ -1284,7 +1225,6 @@ export default function CoursePage() {
               )}
             </div>
 
-            {/* Progress Card - Made Responsive */}
             <Card className="bg-white/10 backdrop-blur-sm border-0 text-white w-full xl:w-80 mt-3 sm:mt-0 flex-shrink-0">
               <CardContent className="p-3 sm:p-4 lg:p-6">
                 <div className="flex items-center justify-between mb-2 sm:mb-3 lg:mb-4">
@@ -1303,7 +1243,8 @@ export default function CoursePage() {
                   <div className="flex items-center gap-1 sm:gap-2 min-w-0">
                     <UsersIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span className="truncate text-xs sm:text-sm">
-                      {course.userA.fullName} & {course.userB.fullName}
+                      {course.userA?.fullName || "User A"} &{" "}
+                      {course.userB?.fullName || "User B"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 sm:gap-2 min-w-0">
@@ -1319,7 +1260,6 @@ export default function CoursePage() {
                   </div>
                 </div>
 
-                {/* Make Appointment Button - Show for both users when course is active */}
                 {canMakeAppointments ? (
                   <Button
                     onClick={openAppointmentBookingModal}
@@ -1343,7 +1283,7 @@ export default function CoursePage() {
         </div>
       </div>
 
-      {/* Tab Navigation - Only show for mutual exchange */}
+      {/* Tab Navigation */}
       {course.exchangeType === "mutual" && (
         <div className="bg-white border-b">
           <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
@@ -1362,10 +1302,9 @@ export default function CoursePage() {
                   variant="secondary"
                   className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5"
                 >
-                  {/* Show what you're learning (other user's skill) */}
                   {isCurrentUserUserA
-                    ? course.userBTeaching.skill
-                    : course.userATeaching.skill}
+                    ? course.userBTeaching?.skill || ""
+                    : course.userATeaching?.skill || ""}
                 </Badge>
               </button>
               <button
@@ -1382,10 +1321,9 @@ export default function CoursePage() {
                   variant="secondary"
                   className="ml-1 bg-green-100 text-green-800 text-xs px-1.5 py-0.5"
                 >
-                  {/* Show what you're teaching (your own skill) */}
                   {isCurrentUserUserA
-                    ? course.userATeaching.skill
-                    : course.userBTeaching.skill}
+                    ? course.userATeaching?.skill || ""
+                    : course.userBTeaching?.skill || ""}
                 </Badge>
               </button>
             </div>
@@ -1426,26 +1364,43 @@ export default function CoursePage() {
         </div>
       )}
 
-      {/* Action Bar - Show based on role and exchange type */}
-      {canUploadFiles && !isCoursePending && (
+      {/* Action Bar */}
+      {(canUploadFiles || canCreateAssignments) && !isCoursePending && (
         <div className="bg-white border-b">
           <div className="max-w-7xl px-3 sm:px-4 lg:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center py-3 sm:py-4 gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <Button
-                  onClick={() => setUploadDialogOpen(true)}
-                  className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
-                  size="sm"
-                >
-                  <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span>Upload File</span>
-                </Button>
+                {canUploadFiles && (
+                  <Button
+                    onClick={() => setUploadDialogOpen(true)}
+                    className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
+                    size="sm"
+                  >
+                    <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span>Upload File</span>
+                  </Button>
+                )}
+                {canCreateAssignments && (
+                  <Button
+                    onClick={openCreateAssignment}
+                    className="flex items-center gap-1.5 sm:gap-2 bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm w-full sm:w-auto justify-center py-2 px-3 sm:px-4"
+                    size="sm"
+                  >
+                    <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span>Create Assignment</span>
+                  </Button>
+                )}
               </div>
               <div className="text-xs sm:text-sm text-gray-600">
                 {isOneWay ? (
-                  <span>Add learning materials for your student</span>
+                  <span>
+                    Add learning materials and assignments for your student
+                  </span>
                 ) : (
-                  <span>Add teaching materials for your exchange partner</span>
+                  <span>
+                    Add teaching materials and assignments for your exchange
+                    partner
+                  </span>
                 )}
               </div>
             </div>
@@ -1462,8 +1417,9 @@ export default function CoursePage() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
-                <strong>Course Pending:</strong> File upload and appointment
-                features will be available once the course is active.
+                <strong>Course Pending:</strong> File upload, assignment, and
+                appointment features will be available once the course is
+                active.
               </p>
             </div>
           </div>
@@ -1475,9 +1431,8 @@ export default function CoursePage() {
         <div className="mx-3 sm:mx-4 lg:mx-6 space-y-3 sm:space-y-4 lg:space-y-6">
           {hasWeeklyStructure ? (
             currentWeeklyStructure.map((week) => {
-              // Filter content to show only relevant appointments for current context
               const filteredContent = filterAppointmentsForCurrentContext(
-                week.content
+                week.content || []
               );
 
               return (
@@ -1492,17 +1447,14 @@ export default function CoursePage() {
                     <div className="flex items-start justify-between gap-3 sm:gap-4">
                       <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                         <div
-                          className={`
-                            flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0
-                            ${
-                              week.completed
-                                ? "bg-green-100 text-green-600"
-                                : (isOneWay && isTeacher) ||
-                                  (!isOneWay && activeTab === "myTeaching")
-                                ? "bg-orange-100 text-orange-600"
-                                : "bg-blue-100 text-blue-600"
-                            }
-                          `}
+                          className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full mt-0.5 flex-shrink-0 ${
+                            week.completed
+                              ? "bg-green-100 text-green-600"
+                              : (isOneWay && isTeacher) ||
+                                (!isOneWay && activeTab === "myTeaching")
+                              ? "bg-orange-100 text-orange-600"
+                              : "bg-blue-100 text-blue-600"
+                          }`}
                         >
                           {expandedWeeks.has(week.weekNumber) ? (
                             <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1514,7 +1466,8 @@ export default function CoursePage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 lg:gap-3 mb-2 sm:mb-3">
                             <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 break-words leading-tight">
-                              Week {week.weekNumber}: {week.title}
+                              Week {week.weekNumber}:{" "}
+                              {week.title || "Untitled Week"}
                             </h3>
                             <div className="flex gap-1 sm:gap-2 flex-wrap">
                               {week.completed && (
@@ -1540,10 +1493,9 @@ export default function CoursePage() {
                             </div>
                           </div>
                           <p className="text-gray-600 text-sm sm:text-base leading-relaxed break-words">
-                            {week.description}
+                            {week.description || "No description provided"}
                           </p>
 
-                          {/* Week Stats */}
                           <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 mt-2 text-xs sm:text-sm text-gray-500 flex-wrap">
                             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                               <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1567,30 +1519,37 @@ export default function CoursePage() {
                                 Sessions
                               </span>
                             </div>
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                              <FileCheck className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <span>
+                                {
+                                  filteredContent.filter(
+                                    (item) => item.type === "assignment"
+                                  ).length
+                                }{" "}
+                                Assignments
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Action Buttons - UPDATED WITH CORRECT LOGIC */}
                       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                         {canUploadFiles && !isCoursePending && (
-                          <>
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                editWeek(week);
-                              }}
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                            >
-                              <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
-                              <span className="hidden sm:inline">Edit</span>
-                            </Button>
-                          </>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              editWeek(week);
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                          >
+                            <Edit3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">Edit</span>
+                          </Button>
                         )}
 
-                        {/* Show Complete/Undo Complete buttons based on completion status */}
                         {((isOneWay && isStudent) ||
                           (!isOneWay && activeTab === "myLearning")) &&
                           !isCoursePending && (
@@ -1628,19 +1587,14 @@ export default function CoursePage() {
                     </div>
                   </div>
 
-                  {/* Expandable Content */}
                   <div
-                    className={`
-                      overflow-hidden transition-all duration-300 ease-in-out
-                      ${
-                        expandedWeeks.has(week.weekNumber)
-                          ? "max-h-[2000px] opacity-100 border-t border-gray-200"
-                          : "max-h-0 opacity-0"
-                      }
-                    `}
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                      expandedWeeks.has(week.weekNumber)
+                        ? "max-h-[2000px] opacity-100 border-t border-gray-200"
+                        : "max-h-0 opacity-0"
+                    }`}
                   >
                     <div className="p-4 sm:p-6">
-                      {/* Content Grid */}
                       <div className="mb-4 sm:mb-6">
                         {filteredContent.length === 0 ? (
                           <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50/50">
@@ -1649,10 +1603,10 @@ export default function CoursePage() {
                               No content added yet for this week
                             </p>
                             <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
-                              {canUploadFiles
+                              {canUploadFiles || canCreateAssignments
                                 ? isCoursePending
-                                  ? "Upload files will be available once course is active"
-                                  : "Check back later for course materials"
+                                  ? "Content creation will be available once course is active"
+                                  : "Add files, assignments, or appointments to get started"
                                 : "Check back later for course materials"}
                             </p>
                           </div>
@@ -1663,11 +1617,19 @@ export default function CoursePage() {
                                 item.type === "appointment"
                                   ? getAppointmentDisplayData(item)
                                   : null;
+                              const userSubmission =
+                                item.type === "assignment"
+                                  ? getUserSubmission(item)
+                                  : null;
 
                               return (
                                 <Card
                                   key={item.id}
-                                  className="hover:shadow-lg transition-all duration-200 border border-gray-200"
+                                  className={`hover:shadow-lg transition-all duration-200 border ${
+                                    item.type === "assignment"
+                                      ? "border-purple-200 bg-purple-50/30"
+                                      : "border-gray-200"
+                                  }`}
                                 >
                                   <CardContent className="p-3 sm:p-4">
                                     <div className="flex items-start gap-2 sm:gap-3">
@@ -1678,7 +1640,10 @@ export default function CoursePage() {
                                             {item.type === "appointment"
                                               ? appointmentData?.title ||
                                                 "Appointment"
-                                              : item.title}
+                                              : item.type === "assignment"
+                                              ? item.assignment?.title ||
+                                                "Assignment"
+                                              : item.title || "Document"}
                                           </h4>
                                           {item.type === "appointment" &&
                                             appointmentData && (
@@ -1703,6 +1668,14 @@ export default function CoursePage() {
                                                   : "Cancelled"}
                                               </Badge>
                                             )}
+                                          {item.type === "assignment" && (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-xs bg-purple-100 text-purple-800"
+                                            >
+                                              Assignment
+                                            </Badge>
+                                          )}
                                         </div>
                                         <p className="text-xs sm:text-sm text-gray-500 mt-1">
                                           {item.type === "appointment" &&
@@ -1711,17 +1684,72 @@ export default function CoursePage() {
                                                 appointmentData.date,
                                                 appointmentData.time
                                               )
+                                            : item.type === "assignment"
+                                            ? `Due: ${
+                                                item.assignment?.dueDate
+                                                  ? new Date(
+                                                      item.assignment.dueDate
+                                                    ).toLocaleDateString()
+                                                  : "No due date"
+                                              } • ${
+                                                item.assignment?.maxPoints || 0
+                                              } points`
                                             : `Uploaded ${item.uploadDate} • ${item.size}`}
                                         </p>
                                         {(item.description ||
                                           (item.type === "appointment" &&
-                                            appointmentData?.description)) && (
+                                            appointmentData?.description) ||
+                                          (item.type === "assignment" &&
+                                            item.assignment?.description)) && (
                                           <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2 break-words">
                                             {item.type === "appointment"
                                               ? appointmentData?.description
+                                              : item.type === "assignment"
+                                              ? item.assignment?.description
                                               : item.description}
                                           </p>
                                         )}
+
+                                        {item.type === "assignment" &&
+                                          userSubmission && (
+                                            <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                                              <div className="flex items-center justify-between text-xs">
+                                                <span className="text-blue-700 font-medium">
+                                                  Submitted
+                                                </span>
+                                                {userSubmission.grade ? (
+                                                  <Badge className="bg-green-500 text-white">
+                                                    <Award className="w-3 h-3 mr-1" />
+                                                    {
+                                                      userSubmission.grade
+                                                        .points
+                                                    }
+                                                    /
+                                                    {
+                                                      userSubmission.grade
+                                                        .maxPoints
+                                                    }
+                                                  </Badge>
+                                                ) : (
+                                                  <Badge
+                                                    variant="secondary"
+                                                    className="bg-yellow-500 text-white"
+                                                  >
+                                                    Pending Grade
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {userSubmission.grade
+                                                ?.feedback && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                  {
+                                                    userSubmission.grade
+                                                      .feedback
+                                                  }
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
                                       </div>
                                     </div>
 
@@ -1729,7 +1757,6 @@ export default function CoursePage() {
                                       <div className="flex items-center gap-1 sm:gap-2">
                                         {item.type === "document" && (
                                           <>
-                                            {/* View Button - only for viewable files */}
                                             {isViewableFile(item.fileType) && (
                                               <Button
                                                 variant="outline"
@@ -1743,7 +1770,6 @@ export default function CoursePage() {
                                                 View
                                               </Button>
                                             )}
-                                            {/* Download Button - for all files */}
                                             <Button
                                               variant="outline"
                                               size="sm"
@@ -1762,30 +1788,102 @@ export default function CoursePage() {
                                         )}
                                         {item.type === "appointment" &&
                                           appointmentData && (
-                                            <>
-                                              {/* Manage Appointments Button */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 sm:h-8 text-xs"
+                                              onClick={navigateToAppointments}
+                                            >
+                                              <ExternalLink className="w-3 h-3 mr-1" />
+                                              Manage
+                                            </Button>
+                                          )}
+                                        {item.type === "assignment" && (
+                                          <>
+                                            {((course.exchangeType ===
+                                              "mutual" &&
+                                              activeTab === "myLearning") ||
+                                              (course.exchangeType ===
+                                                "one-way" &&
+                                                isStudent)) && (
+                                              <>
+                                                {!userSubmission ? (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 sm:h-8 text-xs bg-green-600 text-white hover:bg-green-700"
+                                                    onClick={() =>
+                                                      openSubmitAssignment(
+                                                        item,
+                                                        week.weekNumber
+                                                      )
+                                                    }
+                                                  >
+                                                    <Send className="w-3 h-3 mr-1" />
+                                                    Submit
+                                                  </Button>
+                                                ) : (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 sm:h-8 text-xs"
+                                                    onClick={() =>
+                                                      openSubmitAssignment(
+                                                        item,
+                                                        week.weekNumber
+                                                      )
+                                                    }
+                                                  >
+                                                    <FileUp className="w-3 h-3 mr-1" />
+                                                    Resubmit
+                                                  </Button>
+                                                )}
+                                              </>
+                                            )}
+                                            {((course.exchangeType ===
+                                              "mutual" &&
+                                              activeTab === "myTeaching") ||
+                                              (course.exchangeType ===
+                                                "one-way" &&
+                                                isTeacher)) && (
                                               <Button
                                                 variant="outline"
                                                 size="sm"
                                                 className="h-7 sm:h-8 text-xs"
-                                                onClick={navigateToAppointments}
+                                                onClick={() =>
+                                                  openSubmissionsDialog(
+                                                    item,
+                                                    week.weekNumber
+                                                  )
+                                                }
                                               >
-                                                <ExternalLink className="w-3 h-3 mr-1" />
-                                                Manage
+                                                <ClipboardCheck className="w-3 h-3 mr-1" />
+                                                Submissions (
+                                                {item.assignment?.submissions
+                                                  ?.length || 0}
+                                                )
                                               </Button>
-                                            </>
-                                          )}
+                                            )}
+                                          </>
+                                        )}
                                       </div>
-                                      {canUploadFiles &&
-                                        !isCoursePending &&
-                                        item.type === "document" && (
+                                      {(canUploadFiles ||
+                                        canCreateAssignments) &&
+                                        !isCoursePending && (
                                           <Button
-                                            onClick={() =>
-                                              deleteWeekContent(
-                                                week.weekNumber,
-                                                item.id
-                                              )
-                                            }
+                                            onClick={() => {
+                                              if (item.type === "assignment") {
+                                                deleteAssignment(
+                                                  item.id,
+                                                  week.weekNumber
+                                                );
+                                              } else {
+                                                deleteWeekContent(
+                                                  week.weekNumber,
+                                                  item.id
+                                                );
+                                              }
+                                            }}
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -1807,7 +1905,6 @@ export default function CoursePage() {
               );
             })
           ) : (
-            // Show empty state when no weekly structure exists
             <div className="text-center py-12">
               <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -1834,7 +1931,6 @@ export default function CoursePage() {
           </DialogHeader>
           <form onSubmit={handleUploadSubmit}>
             <div className="space-y-3 sm:space-y-4 max-h-[60vh] overflow-y-auto px-1">
-              {/* Week Selection Dropdown */}
               <div>
                 <label className="block text-sm font-medium mb-1 sm:mb-2">
                   Select Week *
@@ -1855,7 +1951,8 @@ export default function CoursePage() {
                           key={week.weekNumber}
                           value={week.weekNumber.toString()}
                         >
-                          Week {week.weekNumber}: {week.title}
+                          Week {week.weekNumber}:{" "}
+                          {week.title || "Untitled Week"}
                         </SelectItem>
                       ))
                     ) : (
@@ -1936,6 +2033,535 @@ export default function CoursePage() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Assignment Dialog */}
+      <Dialog
+        open={assignmentDialogOpen}
+        onOpenChange={setAssignmentDialogOpen}
+      >
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <FileCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+              Create Assignment
+            </DialogTitle>
+            <DialogDescription>
+              Create a new assignment that will be automatically assigned to the
+              appropriate week based on the due date.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateAssignment}>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Assignment Title *
+                </label>
+                <Input
+                  value={assignmentForm.title}
+                  onChange={(e) =>
+                    setAssignmentForm({
+                      ...assignmentForm,
+                      title: e.target.value,
+                    })
+                  }
+                  placeholder="Enter assignment title"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Description
+                </label>
+                <Textarea
+                  value={assignmentForm.description}
+                  onChange={(e) =>
+                    setAssignmentForm({
+                      ...assignmentForm,
+                      description: e.target.value,
+                    })
+                  }
+                  placeholder="Assignment description and objectives"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Instructions
+                </label>
+                <Textarea
+                  value={assignmentForm.instructions}
+                  onChange={(e) =>
+                    setAssignmentForm({
+                      ...assignmentForm,
+                      instructions: e.target.value,
+                    })
+                  }
+                  placeholder="Detailed instructions for students"
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Due Date *
+                  </label>
+                  <Input
+                    type="date"
+                    value={assignmentForm.dueDate}
+                    onChange={(e) =>
+                      setAssignmentForm({
+                        ...assignmentForm,
+                        dueDate: e.target.value,
+                      })
+                    }
+                    min={new Date().toISOString().split("T")[0]}
+                    max={
+                      courseEndDate
+                        ? courseEndDate.toISOString().split("T")[0]
+                        : ""
+                    }
+                    required
+                  />
+                  {courseEndDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Course ends on {courseEndDate.toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Maximum Points
+                  </label>
+                  <Input
+                    type="number"
+                    value={assignmentForm.maxPoints}
+                    onChange={(e) =>
+                      setAssignmentForm({
+                        ...assignmentForm,
+                        maxPoints: parseInt(e.target.value) || 100,
+                      })
+                    }
+                    min="1"
+                    max="1000"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">
+                  Assignment Information
+                </h4>
+                <p className="text-blue-800 text-sm">
+                  This assignment will be automatically assigned to the
+                  appropriate week based on the due date you select.
+                  {assignmentForm.dueDate && course?.startDate && (
+                    <span className="block mt-1">
+                      It will appear in{" "}
+                      <strong>
+                        Week {getWeekForDate(assignmentForm.dueDate)}
+                      </strong>{" "}
+                      of the course.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="mt-6">
+              <Button
+                type="submit"
+                className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700"
+              >
+                Create Assignment
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Submit Assignment Dialog */}
+      <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+              Submit Assignment
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAssignment?.assignment
+                ? `Submit your work for: ${selectedAssignment.assignment.title}`
+                : "Submit Assignment"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedAssignment?.assignment ? (
+            <form onSubmit={handleSubmitAssignment}>
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+                {selectedAssignment.assignment.instructions && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-900 mb-2">
+                      Instructions:
+                    </h4>
+                    <p className="text-blue-800 text-sm">
+                      {selectedAssignment.assignment.instructions}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Upload Files *
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      You can upload multiple files (Max 10MB each)
+                    </p>
+                    <Input
+                      type="file"
+                      multiple
+                      className="mt-4"
+                      onChange={(e) =>
+                        setSubmitForm({
+                          ...submitForm,
+                          files: Array.from(e.target.files),
+                        })
+                      }
+                      required
+                    />
+                  </div>
+                  {submitForm.files.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-sm font-medium">Selected files:</p>
+                      {submitForm.files.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between bg-gray-50 p-2 rounded"
+                        >
+                          <span className="text-sm truncate">{file.name}</span>
+                          <span className="text-xs text-gray-500">
+                            {(file.size / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="mt-6">
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                  disabled={submitForm.files.length === 0}
+                >
+                  Submit Assignment
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading assignment details...</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Grade Assignment Dialog */}
+      <Dialog open={gradeDialogOpen} onOpenChange={setGradeDialogOpen}>
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <Award className="w-4 h-4 sm:w-5 sm:h-5" />
+              Grade Assignment
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAssignment?.assignment
+                ? `Grade submission for: ${selectedAssignment.assignment.title}`
+                : "Grade Assignment"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedAssignment?.assignment && selectedSubmission ? (
+            <form onSubmit={handleGradeAssignment}>
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+                {selectedSubmission.files &&
+                  selectedSubmission.files.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Submitted Files
+                      </label>
+                      <div className="space-y-2">
+                        {selectedSubmission.files.map((file, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between bg-gray-50 p-3 rounded border"
+                          >
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm">{file.fileName}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                downloadFile(file.fileUrl, file.fileName)
+                              }
+                            >
+                              <Download className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Points *
+                    </label>
+                    <Input
+                      type="number"
+                      value={gradeForm.points}
+                      onChange={(e) =>
+                        setGradeForm({ ...gradeForm, points: e.target.value })
+                      }
+                      min="0"
+                      max={selectedAssignment.assignment.maxPoints || 100}
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Out of {selectedAssignment.assignment.maxPoints || 100}{" "}
+                      points
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Percentage
+                    </label>
+                    <Input
+                      type="text"
+                      value={
+                        gradeForm.points &&
+                        selectedAssignment.assignment.maxPoints
+                          ? `${(
+                              (gradeForm.points /
+                                selectedAssignment.assignment.maxPoints) *
+                              100
+                            ).toFixed(1)}%`
+                          : "0%"
+                      }
+                      disabled
+                      className="bg-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Feedback
+                  </label>
+                  <Textarea
+                    value={gradeForm.feedback}
+                    onChange={(e) =>
+                      setGradeForm({ ...gradeForm, feedback: e.target.value })
+                    }
+                    placeholder="Provide feedback to the student..."
+                    rows={4}
+                  />
+                </div>
+              </div>
+              <DialogFooter className="mt-6">
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                >
+                  Submit Grade
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading submission details...</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Submissions Dialog */}
+      <Dialog
+        open={submissionsDialogOpen}
+        onOpenChange={setSubmissionsDialogOpen}
+      >
+        <DialogContent className="max-w-4xl w-[95vw] sm:w-full rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg lg:text-xl">
+              <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+              Assignment Submissions
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAssignment?.assignment
+                ? `${selectedAssignment.assignment.title} - ${
+                    selectedAssignment.assignment.submissions?.length || 0
+                  } submission(s)`
+                : "Assignment Submissions"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {!selectedAssignment?.assignment ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-500">Loading assignment details...</p>
+              </div>
+            ) : selectedAssignment.assignment.submissions?.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No submissions yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {selectedAssignment.assignment.submissions.map(
+                  (submission, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium">
+                              {submission.studentId?.fullName || "Student"}
+                            </h4>
+                            <Badge
+                              variant={
+                                submission.status === "graded"
+                                  ? "default"
+                                  : submission.status === "late"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                              className="text-xs"
+                            >
+                              {submission.status === "graded"
+                                ? "Graded"
+                                : submission.status === "late"
+                                ? "Late"
+                                : "Submitted"}
+                            </Badge>
+                            {submission.grade && (
+                              <Badge className="bg-green-500 text-white text-xs">
+                                {submission.grade.points}/
+                                {submission.grade.maxPoints}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <p className="text-sm text-gray-500 mb-2">
+                            Submitted on{" "}
+                            {new Date(
+                              submission.submittedAt
+                            ).toLocaleDateString()}{" "}
+                            at{" "}
+                            {new Date(
+                              submission.submittedAt
+                            ).toLocaleTimeString()}
+                          </p>
+
+                          {submission.files && submission.files.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-sm font-medium mb-1">Files:</p>
+                              <div className="space-y-1">
+                                {submission.files.map((file, fileIndex) => (
+                                  <div
+                                    key={fileIndex}
+                                    className="flex items-center gap-2 text-sm"
+                                  >
+                                    <FileText className="w-4 h-4 text-gray-500" />
+                                    <span>{file.fileName}</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2"
+                                      onClick={() =>
+                                        downloadFile(
+                                          file.fileUrl,
+                                          file.fileName
+                                        )
+                                      }
+                                    >
+                                      <Download className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {submission.grade && (
+                            <div className="bg-green-50 border border-green-200 rounded p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Award className="w-4 h-4 text-green-600" />
+                                <span className="font-medium text-green-800">
+                                  Graded
+                                </span>
+                              </div>
+                              {submission.grade.feedback && (
+                                <p className="text-sm text-green-700 mt-1">
+                                  {submission.grade.feedback}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2 ml-4">
+                          {!submission.grade ? (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                openGradeAssignment(
+                                  submission,
+                                  selectedAssignment,
+                                  selectedWeek
+                                )
+                              }
+                            >
+                              <Award className="w-4 h-4 mr-1" />
+                              Grade
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                openGradeAssignment(
+                                  submission,
+                                  selectedAssignment,
+                                  selectedWeek
+                                )
+                              }
+                            >
+                              <Edit3 className="w-4 h-4 mr-1" />
+                              Regrade
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Week Dialog */}
       <Dialog open={weekDialogOpen} onOpenChange={setWeekDialogOpen}>
         <DialogContent className="max-w-md w-[95vw] sm:w-full mx-auto rounded-lg">
@@ -1970,10 +2596,7 @@ export default function CoursePage() {
                 <Textarea
                   value={weekForm.description}
                   onChange={(e) =>
-                    setWeekForm({
-                      ...weekForm,
-                      description: e.target.value,
-                    })
+                    setWeekForm({ ...weekForm, description: e.target.value })
                   }
                   placeholder="Week description and learning objectives"
                   rows={3}
@@ -2004,11 +2627,19 @@ export default function CoursePage() {
             <DialogTitle className="text-base sm:text-lg lg:text-xl">
               {course.exchangeType === "mutual"
                 ? activeTab === "myLearning"
-                  ? `Book Learning Session with ${selectedUser?.fullName}`
-                  : `Book Teaching Session with ${selectedUser?.fullName}`
+                  ? `Book Learning Session with ${
+                      selectedUser?.fullName || "the other user"
+                    }`
+                  : `Book Teaching Session with ${
+                      selectedUser?.fullName || "the other user"
+                    }`
                 : isCurrentUserTeacher()
-                ? `Book Teaching Session with ${selectedUser?.fullName}`
-                : `Book Learning Session with ${selectedUser?.fullName}`}
+                ? `Book Teaching Session with ${
+                    selectedUser?.fullName || "your student"
+                  }`
+                : `Book Learning Session with ${
+                    selectedUser?.fullName || "your teacher"
+                  }`}
             </DialogTitle>
           </DialogHeader>
 
@@ -2095,7 +2726,8 @@ export default function CoursePage() {
                 </div>
               ) : (
                 <p className="text-xs sm:text-sm text-gray-500 italic">
-                  {selectedUser?.fullName} is not available on this day.
+                  {selectedUser?.fullName || "The user"} is not available on
+                  this day.
                 </p>
               ))}
           </div>
