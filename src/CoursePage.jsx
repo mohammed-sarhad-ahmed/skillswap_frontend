@@ -1611,7 +1611,8 @@ export default function CoursePage() {
                             </p>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                          <div className="space-y-3">
+                            {/* Moodle-style row layout for all content types */}
                             {filteredContent.map((item) => {
                               const appointmentData =
                                 item.type === "appointment"
@@ -1623,277 +1624,267 @@ export default function CoursePage() {
                                   : null;
 
                               return (
-                                <Card
+                                <div
                                   key={item.id}
-                                  className={`hover:shadow-lg transition-all duration-200 border ${
+                                  className={`flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border ${
                                     item.type === "assignment"
-                                      ? "border-purple-200 bg-purple-50/30"
-                                      : "border-gray-200"
-                                  }`}
+                                      ? "bg-purple-50 border-purple-200"
+                                      : item.type === "appointment"
+                                      ? "bg-blue-50 border-blue-200"
+                                      : "bg-gray-50 border-gray-200"
+                                  } hover:shadow-sm transition-all duration-200`}
                                 >
-                                  <CardContent className="p-3 sm:p-4">
-                                    <div className="flex items-start gap-2 sm:gap-3">
-                                      {getFileIcon(item.fileType, item.type)}
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                          <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
-                                            {item.type === "appointment"
-                                              ? appointmentData?.title ||
-                                                "Appointment"
-                                              : item.type === "assignment"
-                                              ? item.assignment?.title ||
-                                                "Assignment"
-                                              : item.title || "Document"}
-                                          </h4>
-                                          {item.type === "appointment" &&
-                                            appointmentData && (
-                                              <Badge
-                                                variant={
-                                                  appointmentData.status ===
-                                                  "confirmed"
-                                                    ? "default"
-                                                    : appointmentData.status ===
-                                                      "pending"
-                                                    ? "secondary"
-                                                    : "destructive"
-                                                }
-                                                className="text-xs"
-                                              >
-                                                {appointmentData.status ===
+                                  {/* Icon */}
+                                  <div className="flex-shrink-0">
+                                    {getFileIcon(item.fileType, item.type)}
+                                  </div>
+
+                                  {/* Content */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
+                                      <h4 className="font-semibold text-gray-900 break-words text-sm sm:text-base">
+                                        {item.type === "appointment"
+                                          ? appointmentData?.title ||
+                                            "Appointment"
+                                          : item.type === "assignment"
+                                          ? item.assignment?.title ||
+                                            "Assignment"
+                                          : item.title || "Document"}
+                                      </h4>
+                                      <div className="flex gap-2 flex-wrap">
+                                        {item.type === "appointment" &&
+                                          appointmentData && (
+                                            <Badge
+                                              variant={
+                                                appointmentData.status ===
                                                 "confirmed"
-                                                  ? "Confirmed"
+                                                  ? "default"
                                                   : appointmentData.status ===
                                                     "pending"
-                                                  ? "Pending"
-                                                  : "Cancelled"}
-                                              </Badge>
-                                            )}
-                                          {item.type === "assignment" && (
-                                            <Badge
-                                              variant="outline"
-                                              className="text-xs bg-purple-100 text-purple-800"
+                                                  ? "secondary"
+                                                  : "destructive"
+                                              }
+                                              className="text-xs"
                                             >
-                                              Assignment
+                                              {appointmentData.status ===
+                                              "confirmed"
+                                                ? "Confirmed"
+                                                : appointmentData.status ===
+                                                  "pending"
+                                                ? "Pending"
+                                                : "Cancelled"}
                                             </Badge>
                                           )}
-                                        </div>
-                                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                                          {item.type === "appointment" &&
-                                          appointmentData
-                                            ? formatAppointmentDateTime(
-                                                appointmentData.date,
-                                                appointmentData.time
-                                              )
-                                            : item.type === "assignment"
-                                            ? `Due: ${
-                                                item.assignment?.dueDate
-                                                  ? new Date(
-                                                      item.assignment.dueDate
-                                                    ).toLocaleDateString()
-                                                  : "No due date"
-                                              } • ${
-                                                item.assignment?.maxPoints || 0
-                                              } points`
-                                            : `Uploaded ${item.uploadDate} • ${item.size}`}
-                                        </p>
-                                        {(item.description ||
-                                          (item.type === "appointment" &&
-                                            appointmentData?.description) ||
-                                          (item.type === "assignment" &&
-                                            item.assignment?.description)) && (
-                                          <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2 break-words">
-                                            {item.type === "appointment"
-                                              ? appointmentData?.description
-                                              : item.type === "assignment"
-                                              ? item.assignment?.description
-                                              : item.description}
-                                          </p>
+                                        {item.type === "assignment" && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs bg-purple-100 text-purple-800"
+                                          >
+                                            Assignment
+                                          </Badge>
                                         )}
-
-                                        {item.type === "assignment" &&
-                                          userSubmission && (
-                                            <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
-                                              <div className="flex items-center justify-between text-xs">
-                                                <span className="text-blue-700 font-medium">
-                                                  Submitted
-                                                </span>
-                                                {userSubmission.grade ? (
-                                                  <Badge className="bg-green-500 text-white">
-                                                    <Award className="w-3 h-3 mr-1" />
-                                                    {
-                                                      userSubmission.grade
-                                                        .points
-                                                    }
-                                                    /
-                                                    {
-                                                      userSubmission.grade
-                                                        .maxPoints
-                                                    }
-                                                  </Badge>
-                                                ) : (
-                                                  <Badge
-                                                    variant="secondary"
-                                                    className="bg-yellow-500 text-white"
-                                                  >
-                                                    Pending Grade
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                              {userSubmission.grade
-                                                ?.feedback && (
-                                                <p className="text-xs text-blue-600 mt-1">
-                                                  {
-                                                    userSubmission.grade
-                                                      .feedback
-                                                  }
-                                                </p>
-                                              )}
-                                            </div>
-                                          )}
                                       </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
-                                      <div className="flex items-center gap-1 sm:gap-2">
-                                        {item.type === "document" && (
-                                          <>
-                                            {isViewableFile(item.fileType) && (
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 sm:h-8 text-xs"
-                                                onClick={() =>
-                                                  viewFile(item.fileUrl)
-                                                }
+                                    <p className="text-xs sm:text-sm text-gray-500 mb-2">
+                                      {item.type === "appointment" &&
+                                      appointmentData
+                                        ? formatAppointmentDateTime(
+                                            appointmentData.date,
+                                            appointmentData.time
+                                          )
+                                        : item.type === "assignment"
+                                        ? `Due: ${
+                                            item.assignment?.dueDate
+                                              ? new Date(
+                                                  item.assignment.dueDate
+                                                ).toLocaleDateString()
+                                              : "No due date"
+                                          } • ${
+                                            item.assignment?.maxPoints || 0
+                                          } points`
+                                        : `Uploaded ${item.uploadDate} • ${item.size}`}
+                                    </p>
+
+                                    {(item.description ||
+                                      (item.type === "appointment" &&
+                                        appointmentData?.description) ||
+                                      (item.type === "assignment" &&
+                                        item.assignment?.description)) && (
+                                      <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 break-words">
+                                        {item.type === "appointment"
+                                          ? appointmentData?.description
+                                          : item.type === "assignment"
+                                          ? item.assignment?.description
+                                          : item.description}
+                                      </p>
+                                    )}
+
+                                    {item.type === "assignment" &&
+                                      userSubmission && (
+                                        <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-blue-700 font-medium">
+                                              Submitted
+                                            </span>
+                                            {userSubmission.grade ? (
+                                              <Badge className="bg-green-500 text-white">
+                                                <Award className="w-3 h-3 mr-1" />
+                                                {userSubmission.grade.points}/
+                                                {userSubmission.grade.maxPoints}
+                                              </Badge>
+                                            ) : (
+                                              <Badge
+                                                variant="secondary"
+                                                className="bg-yellow-500 text-white"
                                               >
-                                                <Eye className="w-3 h-3 mr-1" />
-                                                View
-                                              </Button>
+                                                Pending Grade
+                                              </Badge>
                                             )}
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="h-7 sm:h-8 text-xs"
-                                              onClick={() =>
-                                                downloadFile(
-                                                  item.fileUrl,
-                                                  item.title
-                                                )
-                                              }
-                                            >
-                                              <Download className="w-3 h-3 mr-1" />
-                                              Download
-                                            </Button>
-                                          </>
-                                        )}
-                                        {item.type === "appointment" &&
-                                          appointmentData && (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="h-7 sm:h-8 text-xs"
-                                              onClick={navigateToAppointments}
-                                            >
-                                              <ExternalLink className="w-3 h-3 mr-1" />
-                                              Manage
-                                            </Button>
+                                          </div>
+                                          {userSubmission.grade?.feedback && (
+                                            <p className="text-xs text-blue-600 mt-1">
+                                              {userSubmission.grade.feedback}
+                                            </p>
                                           )}
-                                        {item.type === "assignment" && (
+                                        </div>
+                                      )}
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    {item.type === "document" && (
+                                      <>
+                                        {isViewableFile(item.fileType) && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 sm:h-8 text-xs"
+                                            onClick={() =>
+                                              viewFile(item.fileUrl)
+                                            }
+                                          >
+                                            <Eye className="w-3 h-3 mr-1" />
+                                            View
+                                          </Button>
+                                        )}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 sm:h-8 text-xs"
+                                          onClick={() =>
+                                            downloadFile(
+                                              item.fileUrl,
+                                              item.title
+                                            )
+                                          }
+                                        >
+                                          <Download className="w-3 h-3 mr-1" />
+                                          Download
+                                        </Button>
+                                      </>
+                                    )}
+                                    {item.type === "appointment" &&
+                                      appointmentData && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 sm:h-8 text-xs"
+                                          onClick={navigateToAppointments}
+                                        >
+                                          <ExternalLink className="w-3 h-3 mr-1" />
+                                          Manage
+                                        </Button>
+                                      )}
+                                    {item.type === "assignment" && (
+                                      <>
+                                        {((course.exchangeType === "mutual" &&
+                                          activeTab === "myLearning") ||
+                                          (course.exchangeType === "one-way" &&
+                                            isStudent)) && (
                                           <>
-                                            {((course.exchangeType ===
-                                              "mutual" &&
-                                              activeTab === "myLearning") ||
-                                              (course.exchangeType ===
-                                                "one-way" &&
-                                                isStudent)) && (
-                                              <>
-                                                {!userSubmission ? (
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-7 sm:h-8 text-xs bg-green-600 text-white hover:bg-green-700"
-                                                    onClick={() =>
-                                                      openSubmitAssignment(
-                                                        item,
-                                                        week.weekNumber
-                                                      )
-                                                    }
-                                                  >
-                                                    <Send className="w-3 h-3 mr-1" />
-                                                    Submit
-                                                  </Button>
-                                                ) : (
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-7 sm:h-8 text-xs"
-                                                    onClick={() =>
-                                                      openSubmitAssignment(
-                                                        item,
-                                                        week.weekNumber
-                                                      )
-                                                    }
-                                                  >
-                                                    <FileUp className="w-3 h-3 mr-1" />
-                                                    Resubmit
-                                                  </Button>
-                                                )}
-                                              </>
-                                            )}
-                                            {((course.exchangeType ===
-                                              "mutual" &&
-                                              activeTab === "myTeaching") ||
-                                              (course.exchangeType ===
-                                                "one-way" &&
-                                                isTeacher)) && (
+                                            {!userSubmission ? (
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-7 sm:h-8 text-xs"
+                                                className="h-7 sm:h-8 text-xs bg-green-600 text-white hover:bg-green-700"
                                                 onClick={() =>
-                                                  openSubmissionsDialog(
+                                                  openSubmitAssignment(
                                                     item,
                                                     week.weekNumber
                                                   )
                                                 }
                                               >
-                                                <ClipboardCheck className="w-3 h-3 mr-1" />
-                                                Submissions (
-                                                {item.assignment?.submissions
-                                                  ?.length || 0}
-                                                )
+                                                <Send className="w-3 h-3 mr-1" />
+                                                Submit
+                                              </Button>
+                                            ) : (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 sm:h-8 text-xs"
+                                                onClick={() =>
+                                                  openSubmitAssignment(
+                                                    item,
+                                                    week.weekNumber
+                                                  )
+                                                }
+                                              >
+                                                <FileUp className="w-3 h-3 mr-1" />
+                                                Resubmit
                                               </Button>
                                             )}
                                           </>
                                         )}
-                                      </div>
-                                      {(canUploadFiles ||
-                                        canCreateAssignments) &&
-                                        !isCoursePending && (
+                                        {((course.exchangeType === "mutual" &&
+                                          activeTab === "myTeaching") ||
+                                          (course.exchangeType === "one-way" &&
+                                            isTeacher)) && (
                                           <Button
-                                            onClick={() => {
-                                              if (item.type === "assignment") {
-                                                deleteAssignment(
-                                                  item.id,
-                                                  week.weekNumber
-                                                );
-                                              } else {
-                                                deleteWeekContent(
-                                                  week.weekNumber,
-                                                  item.id
-                                                );
-                                              }
-                                            }}
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
-                                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            className="h-7 sm:h-8 text-xs"
+                                            onClick={() =>
+                                              openSubmissionsDialog(
+                                                item,
+                                                week.weekNumber
+                                              )
+                                            }
                                           >
-                                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                            <ClipboardCheck className="w-3 h-3 mr-1" />
+                                            Submissions (
+                                            {item.assignment?.submissions
+                                              ?.length || 0}
+                                            )
                                           </Button>
                                         )}
-                                    </div>
-                                  </CardContent>
-                                </Card>
+                                      </>
+                                    )}
+                                    {(canUploadFiles || canCreateAssignments) &&
+                                      !isCoursePending && (
+                                        <Button
+                                          onClick={() => {
+                                            if (item.type === "assignment") {
+                                              deleteAssignment(
+                                                item.id,
+                                                week.weekNumber
+                                              );
+                                            } else {
+                                              deleteWeekContent(
+                                                week.weekNumber,
+                                                item.id
+                                              );
+                                            }
+                                          }}
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        </Button>
+                                      )}
+                                  </div>
+                                </div>
                               );
                             })}
                           </div>
