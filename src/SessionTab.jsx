@@ -265,8 +265,8 @@ const getAdvancedAudioConstraints = () => ({
     latency: 0,
   },
   video: {
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
     frameRate: { ideal: 30 },
   },
 });
