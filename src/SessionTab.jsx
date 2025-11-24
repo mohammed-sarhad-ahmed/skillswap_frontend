@@ -18,7 +18,269 @@ import {
   Star,
 } from "lucide-react";
 
-// Separate Rating Modal Component to prevent re-renders
+// Advanced Audio Processor using Web Audio API
+class AdvancedAudioProcessor {
+  constructor() {
+    this.audioContext = null;
+    this.processor = null;
+    this.source = null;
+    this.destination = null;
+    this.gainNode = null;
+    this.analyser = null;
+    this.isInitialized = false;
+  }
+
+  async initialize() {
+    if (this.isInitialized) return true;
+
+    try {
+      this.audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)({
+        latencyHint: "interactive",
+        sampleRate: 48000,
+      });
+
+      await this.audioContext.resume();
+
+      // Create audio nodes
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.gain.value = 1.2;
+
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 1024;
+      this.analyser.smoothingTimeConstant = 0.8;
+
+      this.destination = this.audioContext.createMediaStreamDestination();
+
+      // Create worklet processor for better performance
+      try {
+        // Try to use AudioWorklet for better performance
+        await this.audioContext.audioWorklet.addModule(`
+          class AudioProcessor extends AudioWorkletProcessor {
+            process(inputs, outputs) {
+              const input = inputs[0];
+              const output = outputs[0];
+              
+              if (input.length > 0) {
+                for (let channel = 0; channel < input.length; channel++) {
+                  const inputChannel = input[channel];
+                  const outputChannel = output[channel];
+                  
+                  // Noise gate and echo suppression
+                  let sum = 0;
+                  for (let i = 0; i < inputChannel.length; i++) {
+                    sum += Math.abs(inputChannel[i]);
+                  }
+                  const average = sum / inputChannel.length;
+                  const threshold = 0.005;
+                  
+                  if (average < threshold) {
+                    // Suppress noise
+                    for (let i = 0; i < outputChannel.length; i++) {
+                      outputChannel[i] = 0;
+                    }
+                  } else {
+                    // Pass through with gentle compression
+                    for (let i = 0; i < outputChannel.length; i++) {
+                      outputChannel[i] = inputChannel[i] * Math.min(1.0, 1.3 - (average * 8));
+                    }
+                  }
+                }
+              }
+              return true;
+            }
+          }
+          registerProcessor('audio-processor', AudioProcessor);
+        `);
+
+        this.processor = new AudioWorkletNode(
+          this.audioContext,
+          "audio-processor"
+        );
+        console.log("AudioWorklet processor initialized");
+      } catch (workletError) {
+        console.warn(
+          "AudioWorklet not supported, using ScriptProcessor:",
+          workletError
+        );
+        // Fallback to ScriptProcessor
+        this.processor = this.audioContext.createScriptProcessor(2048, 1, 1);
+        this.processor.onaudioprocess = (event) => {
+          this.processAudio(event);
+        };
+      }
+
+      // Connect nodes
+      this.gainNode.connect(this.processor);
+      this.processor.connect(this.analyser);
+      this.analyser.connect(this.destination);
+
+      this.isInitialized = true;
+      console.log("Advanced Audio Processor initialized successfully");
+      return true;
+    } catch (error) {
+      console.error("Failed to initialize audio processor:", error);
+      this.isInitialized = false;
+      return false;
+    }
+  }
+
+  processAudio(event) {
+    const inputBuffer = event.inputBuffer;
+    const outputBuffer = event.outputBuffer;
+
+    for (let channel = 0; channel < inputBuffer.numberOfChannels; channel++) {
+      const inputData = inputBuffer.getChannelData(channel);
+      const outputData = outputBuffer.getChannelData(channel);
+
+      // Advanced noise suppression and echo cancellation
+      let sum = 0;
+      let max = 0;
+
+      for (let i = 0; i < inputData.length; i++) {
+        const absValue = Math.abs(inputData[i]);
+        sum += absValue;
+        max = Math.max(max, absValue);
+      }
+
+      const average = sum / inputData.length;
+      const dynamicThreshold = Math.max(0.003, max * 0.1);
+
+      if (average < dynamicThreshold) {
+        // Complete silence for noise suppression
+        for (let i = 0; i < outputData.length; i++) {
+          outputData[i] = 0;
+        }
+      } else {
+        // Apply dynamic compression and high-pass filter
+        const compressionFactor = Math.min(1.5, 1.0 / (average * 2));
+        for (let i = 0; i < outputData.length; i++) {
+          // Simple high-pass filter (remove DC offset and low frequencies)
+          const filtered = inputData[i] - inputData[i > 0 ? i - 1 : 0] * 0.96;
+          outputData[i] = filtered * compressionFactor;
+        }
+      }
+    }
+  }
+
+  async processStream(stream) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    try {
+      // Disconnect previous source if exists
+      if (this.source) {
+        this.source.disconnect();
+      }
+
+      this.source = this.audioContext.createMediaStreamSource(stream);
+      this.source.connect(this.gainNode);
+
+      // Create enhanced stream
+      const enhancedStream = new MediaStream([
+        ...stream.getVideoTracks(),
+        ...this.destination.stream.getAudioTracks(),
+      ]);
+
+      console.log("Audio stream enhanced successfully");
+      return enhancedStream;
+    } catch (error) {
+      console.warn("Audio processing failed, using original stream:", error);
+      return stream;
+    }
+  }
+
+  setVolume(volume) {
+    if (this.gainNode) {
+      this.gainNode.gain.value = Math.max(0.1, Math.min(3.0, volume));
+    }
+  }
+
+  getAudioLevel() {
+    if (!this.analyser || !this.isInitialized) return 0;
+
+    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.getByteFrequencyData(dataArray);
+
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += dataArray[i];
+    }
+
+    const average = sum / dataArray.length;
+    const normalized = Math.min(average / 128, 1);
+
+    // Apply smoothing
+    return Math.max(0, Math.min(1, normalized * 1.2));
+  }
+
+  async dispose() {
+    if (this.source) {
+      this.source.disconnect();
+    }
+    if (this.gainNode) {
+      this.gainNode.disconnect();
+    }
+    if (this.processor) {
+      this.processor.disconnect();
+    }
+    if (this.analyser) {
+      this.analyser.disconnect();
+    }
+    if (this.audioContext && this.audioContext.state !== "closed") {
+      await this.audioContext.close();
+    }
+    this.isInitialized = false;
+  }
+}
+
+// Advanced WebRTC audio constraints
+const getAdvancedAudioConstraints = () => ({
+  audio: {
+    // Basic constraints
+    channelCount: 1,
+    sampleRate: 48000,
+    sampleSize: 16,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+
+    // Advanced Chrome-specific constraints
+    googEchoCancellation: true,
+    googAutoGainControl: true,
+    googNoiseSuppression: true,
+    googHighpassFilter: true,
+    googAudioMirroring: false,
+
+    // Experimental constraints for better quality
+    googEchoCancellation2: true,
+    googNoiseSuppression2: true,
+    googAutoGainControl2: true,
+    googExperimentalAutoGainControl: true,
+    googExperimentalNoiseSuppression: true,
+    googExperimentalEchoCancellation: true,
+
+    // Latency optimization
+    latency: 0,
+  },
+  video: {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30 },
+  },
+});
+
+const getFallbackConstraints = () => ({
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+  video: true,
+});
+
+// Separate Rating Modal Component
 const RatingModal = ({
   showRating,
   setShowRating,
@@ -47,7 +309,6 @@ const RatingModal = ({
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={(e) => {
-        // Only close if clicking the backdrop (not the modal content)
         if (e.target === e.currentTarget) {
           setShowRating(false);
         }
@@ -55,7 +316,7 @@ const RatingModal = ({
     >
       <div
         className="bg-gradient-to-br from-purple-600 to-indigo-500 rounded-2xl p-8 max-w-md w-full shadow-2xl"
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
+        onClick={(e) => e.stopPropagation()}
       >
         {!ratingSubmitted ? (
           <>
@@ -89,7 +350,6 @@ const RatingModal = ({
               ))}
             </div>
 
-            {/* Review Text Area */}
             <div className="mb-4">
               <label
                 htmlFor="review"
@@ -112,7 +372,6 @@ const RatingModal = ({
               </div>
             </div>
 
-            {/* Error Message Display */}
             {ratingError && (
               <div className="mb-4 p-3 bg-red-400/20 border border-red-300/30 rounded-lg">
                 <p className="text-red-100 text-sm text-center">
@@ -179,8 +438,8 @@ export default function SessionTab() {
   const [countdown, setCountdown] = useState("");
   const [otherJoined, setOtherJoined] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [micOn, setMicOn] = useState(false); // Changed to false by default
-  const [cameraOn, setCameraOn] = useState(false); // Changed to false by default
+  const [micOn, setMicOn] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
   const [videoHidden, setVideoHidden] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -195,6 +454,8 @@ export default function SessionTab() {
   const [endedSession, setEndedSession] = useState(null);
   const [review, setReview] = useState("");
   const [ratingError, setRatingError] = useState("");
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
   const localVideoRef = useRef(null);
   const localVideoContainerRef = useRef(null);
@@ -203,8 +464,51 @@ export default function SessionTab() {
   const screenStreamRef = useRef(null);
   const peerRef = useRef(null);
   const callRef = useRef(null);
+  const audioProcessorRef = useRef(null);
+  const audioLevelIntervalRef = useRef(null);
 
   const navigate = useNavigate();
+
+  // Initialize advanced audio processor
+  useEffect(() => {
+    audioProcessorRef.current = new AdvancedAudioProcessor();
+
+    const initAudio = async () => {
+      const success = await audioProcessorRef.current.initialize();
+      setAudioInitialized(success);
+      console.log("Audio processor initialized:", success);
+    };
+
+    initAudio();
+
+    return () => {
+      if (audioLevelIntervalRef.current) {
+        clearInterval(audioLevelIntervalRef.current);
+      }
+      audioProcessorRef.current?.dispose();
+    };
+  }, []);
+
+  // Audio level monitoring
+  useEffect(() => {
+    if (micOn && audioInitialized) {
+      audioLevelIntervalRef.current = setInterval(() => {
+        const level = audioProcessorRef.current.getAudioLevel();
+        setAudioLevel(level);
+      }, 100);
+    } else {
+      if (audioLevelIntervalRef.current) {
+        clearInterval(audioLevelIntervalRef.current);
+      }
+      setAudioLevel(0);
+    }
+
+    return () => {
+      if (audioLevelIntervalRef.current) {
+        clearInterval(audioLevelIntervalRef.current);
+      }
+    };
+  }, [micOn, audioInitialized]);
 
   // Check if mobile and handle resize
   useEffect(() => {
@@ -261,7 +565,6 @@ export default function SessionTab() {
   // Fetch sessions (active first, then next)
   const fetchSessions = async () => {
     try {
-      // First, check for active sessions
       const activeRes = await fetch(`${API_BASE_URL}/appointments/active`, {
         headers: { auth: getToken() },
       });
@@ -271,18 +574,15 @@ export default function SessionTab() {
         setNextSession(activeData.data.appointment);
         setCanJoin(true);
         setSessionEnded(false);
-        console.log("Active session found:", activeData.data.appointment);
         return;
       }
 
-      // If no active session, get the next upcoming one
       const nextRes = await fetch(`${API_BASE_URL}/appointments/next`, {
         headers: { auth: getToken() },
       });
       const nextData = await nextRes.json();
       setNextSession(nextData.data?.appointment || null);
       setSessionEnded(false);
-      console.log("Next session:", nextData.data?.appointment);
     } catch (err) {
       console.error("Failed to fetch sessions:", err);
       setNextSession(null);
@@ -299,18 +599,14 @@ export default function SessionTab() {
 
     const interval = setInterval(() => {
       const now = new Date();
-
-      // Use the date field directly since it's already a full timestamp
       const sessionStart = new Date(nextSession.date);
 
-      // Override the time with the time from the time field if needed
       if (nextSession.time) {
         const [hours, minutes] = nextSession.time.split(":").map(Number);
         sessionStart.setHours(hours, minutes, 0, 0);
       }
 
       const sessionEnd = new Date(sessionStart.getTime() + 60 * 60 * 1000);
-
       const isSessionActive = now >= sessionStart && now <= sessionEnd;
       setCanJoin(isSessionActive);
 
@@ -371,10 +667,37 @@ export default function SessionTab() {
 
   const startLocalStream = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      console.log("Starting local stream with advanced audio processing...");
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(
+          getAdvancedAudioConstraints()
+        );
+        console.log("Advanced audio constraints applied successfully");
+      } catch (advancedError) {
+        console.warn(
+          "Advanced constraints failed, using fallback:",
+          advancedError
+        );
+        stream = await navigator.mediaDevices.getUserMedia(
+          getFallbackConstraints()
+        );
+        console.log("Fallback audio constraints applied");
+      }
+
+      // Process stream with advanced audio processor
+      if (audioInitialized) {
+        console.log("Processing audio stream with advanced processor...");
+        try {
+          stream = await audioProcessorRef.current.processStream(stream);
+        } catch (processingError) {
+          console.warn(
+            "Audio processing failed, using original stream:",
+            processingError
+          );
+        }
+      }
 
       localStreamRef.current = stream;
 
@@ -390,42 +713,27 @@ export default function SessionTab() {
         audioTracks.forEach((track) => (track.enabled = false));
       }
 
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.volume = 1.0;
+      }
+
+      console.log("Local stream started successfully");
       return stream;
     } catch (error) {
       console.error("Error starting local stream:", error);
-      // Fallback to basic constraints if 1080p fails
-      const fallbackStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-
-      localStreamRef.current = fallbackStream;
-
-      // Turn off video and audio by default for fallback stream too
-      const videoTracks = fallbackStream.getVideoTracks();
-      const audioTracks = fallbackStream.getAudioTracks();
-
-      if (videoTracks.length > 0) {
-        videoTracks.forEach((track) => (track.enabled = false));
-      }
-
-      if (audioTracks.length > 0) {
-        audioTracks.forEach((track) => (track.enabled = false));
-      }
-
-      if (localVideoRef.current)
-        localVideoRef.current.srcObject = fallbackStream;
-      return fallbackStream;
+      throw error;
     }
   };
 
   const setupCallHandlers = (mediaConn) => {
     mediaConn.on("stream", (remoteStream) => {
+      console.log("Remote stream received");
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStream;
         remoteVideoRef.current.setAttribute("playsinline", "true");
         remoteVideoRef.current.playsInline = true;
+        remoteVideoRef.current.volume = 1.0;
       }
       setOtherJoined(true);
     });
@@ -456,7 +764,12 @@ export default function SessionTab() {
   };
 
   const cleanupAfterCall = () => {
-    // Stop all media tracks
+    console.log("Cleaning up call...");
+
+    if (audioLevelIntervalRef.current) {
+      clearInterval(audioLevelIntervalRef.current);
+    }
+
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
 
@@ -478,6 +791,7 @@ export default function SessionTab() {
     setHasJoined(false);
     setIsSharingScreen(false);
     setScreenAudioOn(false);
+    setAudioLevel(0);
   };
 
   const replaceVideoTrack = (newTrack) => {
@@ -500,7 +814,6 @@ export default function SessionTab() {
     const newState = !screenAudioOn;
     setScreenAudioOn(newState);
 
-    // Toggle screen audio track
     const audioTracks = screenStreamRef.current.getAudioTracks();
     if (audioTracks.length > 0) {
       audioTracks.forEach((track) => {
@@ -511,7 +824,6 @@ export default function SessionTab() {
 
   const toggleShare = async () => {
     if (isSharingScreen) {
-      // Stop screen share and return to camera
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
 
@@ -526,7 +838,6 @@ export default function SessionTab() {
           replaceAudioTrack(audioTrack);
         }
 
-        // Switch back to camera in local video
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStreamRef.current;
         }
@@ -536,39 +847,44 @@ export default function SessionTab() {
       setScreenAudioOn(false);
     } else {
       try {
-        // Start screen share with audio
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: "always",
             width: { ideal: 1920 },
             height: { ideal: 1080 },
           },
-          audio: true,
+          audio: getAdvancedAudioConstraints().audio,
         });
 
-        screenStreamRef.current = displayStream;
-
-        // Update local video to show screen share
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = displayStream;
+        let enhancedScreenStream = displayStream;
+        if (audioInitialized) {
+          try {
+            enhancedScreenStream =
+              await audioProcessorRef.current.processStream(displayStream);
+          } catch (error) {
+            console.warn("Could not process screen audio:", error);
+          }
         }
 
-        // Replace the video track in the call
-        const videoTrack = displayStream.getVideoTracks()[0];
+        screenStreamRef.current = enhancedScreenStream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = enhancedScreenStream;
+        }
+
+        const videoTrack = enhancedScreenStream.getVideoTracks()[0];
         if (videoTrack) {
           replaceVideoTrack(videoTrack);
         }
 
-        // Handle audio if screen has audio
-        if (displayStream.getAudioTracks().length > 0) {
-          const audioTrack = displayStream.getAudioTracks()[0];
+        if (enhancedScreenStream.getAudioTracks().length > 0) {
+          const audioTrack = enhancedScreenStream.getAudioTracks()[0];
           if (audioTrack) {
             replaceAudioTrack(audioTrack);
-            setScreenAudioOn(true); // Start with screen audio on by default
+            setScreenAudioOn(true);
           }
         }
 
-        // Handle when screen share ends
         videoTrack.onended = () => {
           if (localStreamRef.current && localVideoRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
@@ -591,7 +907,6 @@ export default function SessionTab() {
         setIsSharingScreen(true);
       } catch (err) {
         console.error("Error sharing screen:", err);
-        // If user cancels screen share prompt, reset state
         setIsSharingScreen(false);
         setScreenAudioOn(false);
       }
@@ -651,7 +966,6 @@ export default function SessionTab() {
       console.error("Peer error:", err);
     });
 
-    // Cleanup peer on unmount
     return () => {
       if (peer && !peer.destroyed) {
         peer.destroy();
@@ -669,8 +983,17 @@ export default function SessionTab() {
     if (!localStreamRef.current) return;
     const audioTracks = localStreamRef.current.getAudioTracks();
     if (audioTracks.length > 0) {
-      audioTracks.forEach((t) => (t.enabled = !t.enabled));
-      setMicOn((prev) => !prev);
+      const newState = !micOn;
+      audioTracks.forEach((t) => {
+        t.enabled = newState;
+      });
+      setMicOn(newState);
+
+      if (newState) {
+        console.log("Microphone enabled with advanced audio processing");
+      } else {
+        console.log("Microphone disabled");
+      }
     }
   };
 
@@ -689,7 +1012,6 @@ export default function SessionTab() {
 
   const increaseTeacherCredit = async () => {
     try {
-      // If current user is student, increase teacher's credit
       const creditRes = await fetch(`${API_BASE_URL}/user/credits/increase`, {
         method: "POST",
         headers: {
@@ -738,23 +1060,17 @@ export default function SessionTab() {
       const ratingData = await ratingRes.json();
 
       if (!ratingRes.ok) {
-        // Handle HTTP error (400, 500, etc.)
         const errorMessage = ratingData.message || "Failed to submit rating";
         console.error("Failed to submit rating:", errorMessage);
         setRatingError(errorMessage);
         return;
       }
 
-      // Handle success case
       if (ratingData.status.toLowerCase() === "success") {
         console.log("Rating and review submitted successfully");
         setRatingSubmitted(true);
-        setRatingError(""); // Clear any previous errors
-
-        // REMOVED: No auto-dismiss timeout - user must click "Continue"
-        // The modal will stay open until user clicks "Continue"
+        setRatingError("");
       } else {
-        // Handle backend success: false case
         const errorMessage = ratingData.message || "Rating submission failed";
         console.error("Rating submission failed:", errorMessage);
         setRatingError(errorMessage);
@@ -766,37 +1082,30 @@ export default function SessionTab() {
   };
 
   const handleSessionEnded = async () => {
-    // Store the current session before cleanup
     const currentSession = nextSession;
 
-    // Cleanup media and connection
     cleanupAfterCall();
 
-    // Mark session as ended
     setSessionEnded(true);
     setCanJoin(false);
     setHasJoined(false);
     setShowEndConfirm(false);
 
     try {
-      // Update session status on backend
       await fetch(`${API_BASE_URL}/appointments/end/${currentSession._id}`, {
         method: "PATCH",
         headers: { auth: getToken() },
       });
       console.log("Session marked as completed on server");
 
-      // Increase teacher credit if current user is student
       await increaseTeacherCredit();
 
-      // Show rating modal if current user is student
       if (currentUser?._id === currentSession?.student?._id) {
         console.log("Showing rating modal for student");
-        setEndedSession(currentSession); // Store the ended session
-        setShowRating(true); // Show rating modal
+        setEndedSession(currentSession);
+        setShowRating(true);
       } else {
         console.log("Not showing rating modal - user is teacher");
-        // Fetch the next session only if not showing rating
         await fetchSessions();
       }
     } catch (err) {
@@ -818,7 +1127,6 @@ export default function SessionTab() {
     setRatingSubmitted(false);
     setReview("");
     setRatingError("");
-    // Fetch next sessions after skipping rating
     await fetchSessions();
   };
 
@@ -828,12 +1136,15 @@ export default function SessionTab() {
     setRatingSubmitted(false);
     setReview("");
     setRatingError("");
-    fetchSessions(); // Fetch next sessions
+    fetchSessions();
   };
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => cleanupAfterCall();
+    return () => {
+      cleanupAfterCall();
+      audioProcessorRef.current?.dispose();
+    };
   }, []);
 
   // Confirmation Dialog Component
@@ -863,6 +1174,28 @@ export default function SessionTab() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+
+  // Audio level indicator component
+  const AudioLevelIndicator = () => (
+    <div className="absolute top-3 right-16 bg-black/70 rounded-full px-3 py-1 flex items-center gap-2">
+      <div
+        className="w-3 h-3 rounded-full transition-all duration-200"
+        style={{
+          backgroundColor:
+            audioLevel > 0.3
+              ? "#22c55e"
+              : audioLevel > 0.1
+              ? "#eab308"
+              : "#ef4444",
+          opacity: audioLevel > 0.05 ? 1 : 0.5,
+          transform: `scale(${1 + audioLevel})`,
+        }}
+      />
+      <span className="text-white text-xs font-semibold">
+        {Math.round(audioLevel * 100)}%
+      </span>
     </div>
   );
 
@@ -901,7 +1234,6 @@ export default function SessionTab() {
   if (showRating) {
     return (
       <div className="flex flex-col h-screen bg-gradient-to-br from-purple-600 to-indigo-500 overflow-hidden">
-        {/* Background with next session info */}
         <div className="absolute inset-0 flex items-center justify-center p-6">
           <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-2xl w-full text-center border border-white/20">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
@@ -1012,7 +1344,6 @@ export default function SessionTab() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-purple-600 to-indigo-500 overflow-hidden">
-      {/* Confirmation Dialog */}
       {showEndConfirm && <EndSessionConfirmation />}
 
       {!canJoin && (
@@ -1079,7 +1410,8 @@ export default function SessionTab() {
 
       {canJoin && hasJoined && (
         <div className="flex flex-col h-screen bg-gray-50 p-0 gap-0">
-          {/* Waiting */}
+          {micOn && <AudioLevelIndicator />}
+
           {!otherJoined && (
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center justify-center text-center bg-white/10 backdrop-blur-md px-10 py-8 rounded-3xl shadow-2xl border border-white/20 animate-fade-in">
               <p className="text-xl font-medium text-white mb-4">
@@ -1092,9 +1424,7 @@ export default function SessionTab() {
             </div>
           )}
 
-          {/* Video Container */}
           <div className="relative w-full h-full bg-black overflow-hidden">
-            {/* Big remote video */}
             <video
               ref={remoteVideoRef}
               autoPlay
@@ -1105,7 +1435,6 @@ export default function SessionTab() {
               {otherJoined ? otherParticipant.fullName : "Waiting..."}
             </div>
 
-            {/* Fixed local video in top right corner */}
             <div
               ref={localVideoContainerRef}
               className={`absolute top-2 right-2 ${
@@ -1168,7 +1497,6 @@ export default function SessionTab() {
             </div>
           </div>
 
-          {/* Enhanced Controls with Screen Audio Toggle */}
           {connected && (
             <div
               className={`absolute ${
@@ -1220,7 +1548,6 @@ export default function SessionTab() {
                 )}
               </Button>
 
-              {/* Screen Share Button */}
               <Button
                 onClick={toggleShare}
                 className={`${isMobile ? "p-2 text-xs" : "px-4 py-2"} ${
@@ -1242,7 +1569,6 @@ export default function SessionTab() {
                 )}
               </Button>
 
-              {/* Screen Audio Toggle - Only show when sharing screen with audio */}
               {isSharingScreen &&
                 screenStreamRef.current?.getAudioTracks().length > 0 && (
                   <Button
