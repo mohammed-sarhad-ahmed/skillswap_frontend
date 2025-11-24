@@ -750,16 +750,51 @@ export default function SessionTab() {
   };
 
   const replaceAudioTrack = (newTrack) => {
-    if (!callRef.current) return;
+    if (!callRef.current || !newTrack) {
+      console.warn("Cannot replace audio track: no active call or track");
+      return;
+    }
 
-    const sender = callRef.current.peerConnection
-      ?.getSenders()
-      ?.find((s) => s.track && s.track.kind === "audio");
+    try {
+      const senders = callRef.current.peerConnection?.getSenders();
+      if (!senders) {
+        console.warn("No senders available");
+        return;
+      }
 
-    if (sender && newTrack) {
-      sender
-        .replaceTrack(newTrack)
-        .catch((err) => console.error("Error replacing audio track:", err));
+      const audioSender = senders.find(
+        (s) => s.track && s.track.kind === "audio"
+      );
+
+      if (audioSender) {
+        audioSender
+          .replaceTrack(newTrack)
+          .then(() => {
+            console.log("Audio track replaced successfully");
+          })
+          .catch((err) => {
+            console.error("Error replacing audio track:", err);
+            // Fallback: reinitialize the call with the new stream
+            if (localStreamRef.current && peerRef.current && otherParticipant) {
+              const otherId = buildPeerId(
+                nextSession._id,
+                otherParticipant._id
+              );
+              const newCall = peerRef.current.call(
+                otherId,
+                localStreamRef.current
+              );
+              if (newCall) {
+                setupCallHandlers(newCall);
+                callRef.current = newCall;
+              }
+            }
+          });
+      } else {
+        console.warn("No audio sender found");
+      }
+    } catch (error) {
+      console.error("Error in replaceAudioTrack:", error);
     }
   };
 
@@ -795,16 +830,36 @@ export default function SessionTab() {
   };
 
   const replaceVideoTrack = (newTrack) => {
-    if (!callRef.current) return;
+    if (!callRef.current || !newTrack) {
+      console.warn("Cannot replace video track: no active call or track");
+      return;
+    }
 
-    const sender = callRef.current.peerConnection
-      ?.getSenders()
-      ?.find((s) => s.track && s.track.kind === "video");
+    try {
+      const senders = callRef.current.peerConnection?.getSenders();
+      if (!senders) {
+        console.warn("No senders available");
+        return;
+      }
 
-    if (sender && newTrack) {
-      sender
-        .replaceTrack(newTrack)
-        .catch((err) => console.error("Error replacing video track:", err));
+      const videoSender = senders.find(
+        (s) => s.track && s.track.kind === "video"
+      );
+
+      if (videoSender) {
+        videoSender
+          .replaceTrack(newTrack)
+          .then(() => {
+            console.log("Video track replaced successfully");
+          })
+          .catch((err) => {
+            console.error("Error replacing video track:", err);
+          });
+      } else {
+        console.warn("No video sender found");
+      }
+    } catch (error) {
+      console.error("Error in replaceVideoTrack:", error);
     }
   };
 
@@ -824,20 +879,44 @@ export default function SessionTab() {
 
   const toggleShare = async () => {
     if (isSharingScreen) {
-      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
+      console.log("Stopping screen share...");
 
+      // Stop screen sharing
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          console.log(`Stopped screen track: ${track.kind}`);
+        });
+        screenStreamRef.current = null;
+      }
+
+      // Switch back to camera and microphone
       if (localStreamRef.current) {
         const videoTrack = localStreamRef.current.getVideoTracks()[0];
         const audioTrack = localStreamRef.current.getAudioTracks()[0];
 
+        console.log("Restoring camera and microphone...");
+
+        // Replace video track first
         if (videoTrack) {
           replaceVideoTrack(videoTrack);
-        }
-        if (audioTrack) {
-          replaceAudioTrack(audioTrack);
+          console.log("Camera video track restored");
         }
 
+        // Replace audio track with proper error handling
+        if (audioTrack) {
+          // Small delay to ensure proper synchronization
+          setTimeout(() => {
+            try {
+              replaceAudioTrack(audioTrack);
+              console.log("Microphone audio track restored");
+            } catch (error) {
+              console.error("Failed to restore audio track:", error);
+            }
+          }, 150);
+        }
+
+        // Update local video display
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStreamRef.current;
         }
@@ -845,8 +924,11 @@ export default function SessionTab() {
 
       setIsSharingScreen(false);
       setScreenAudioOn(false);
+      console.log("Screen sharing stopped successfully");
     } else {
+      // Start screen sharing
       try {
+        console.log("Starting screen share...");
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: "always",
@@ -868,49 +950,79 @@ export default function SessionTab() {
 
         screenStreamRef.current = enhancedScreenStream;
 
+        // Update local video display to show screen share
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = enhancedScreenStream;
         }
 
+        // Replace video track with screen share
         const videoTrack = enhancedScreenStream.getVideoTracks()[0];
         if (videoTrack) {
           replaceVideoTrack(videoTrack);
+          console.log("Screen video track applied");
         }
 
+        // Handle screen audio if available
         if (enhancedScreenStream.getAudioTracks().length > 0) {
           const audioTrack = enhancedScreenStream.getAudioTracks()[0];
           if (audioTrack) {
-            replaceAudioTrack(audioTrack);
+            // Small delay to ensure track replacement happens after video
+            setTimeout(() => {
+              replaceAudioTrack(audioTrack);
+            }, 100);
             setScreenAudioOn(true);
+            console.log("Screen audio track applied");
           }
+        } else {
+          console.log("No screen audio tracks available");
         }
 
+        // Handle screen share ending by user (browser controls)
         videoTrack.onended = () => {
-          if (localStreamRef.current && localVideoRef.current) {
-            localVideoRef.current.srcObject = localStreamRef.current;
-            const cameraTrack = localStreamRef.current.getVideoTracks()[0];
-            const micAudioTrack = localStreamRef.current.getAudioTracks()[0];
-
-            if (cameraTrack) {
-              replaceVideoTrack(cameraTrack);
-            }
-            if (micAudioTrack) {
-              replaceAudioTrack(micAudioTrack);
-            }
-          }
-
-          setIsSharingScreen(false);
-          setScreenAudioOn(false);
-          screenStreamRef.current = null;
+          console.log("Screen share ended by user (browser controls)");
+          handleStopScreenShare();
         };
 
         setIsSharingScreen(true);
+        console.log("Screen sharing started successfully");
       } catch (err) {
         console.error("Error sharing screen:", err);
         setIsSharingScreen(false);
         setScreenAudioOn(false);
+
+        // If user cancels screen share prompt, don't show error
+        if (err.name !== "NotAllowedError" && err.name !== "AbortError") {
+          alert(
+            "Failed to share screen. Please check your browser permissions."
+          );
+        }
       }
     }
+  };
+
+  const handleStopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
+
+    if (localStreamRef.current && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+      const cameraTrack = localStreamRef.current.getVideoTracks()[0];
+      const micAudioTrack = localStreamRef.current.getAudioTracks()[0];
+
+      if (cameraTrack) {
+        replaceVideoTrack(cameraTrack);
+      }
+      if (micAudioTrack) {
+        setTimeout(() => {
+          replaceAudioTrack(micAudioTrack);
+        }, 100);
+      }
+    }
+
+    setIsSharingScreen(false);
+    setScreenAudioOn(false);
   };
 
   const initPeerAndConnect = async () => {
