@@ -774,21 +774,6 @@ export default function SessionTab() {
           })
           .catch((err) => {
             console.error("Error replacing audio track:", err);
-            // Fallback: reinitialize the call with the new stream
-            if (localStreamRef.current && peerRef.current && otherParticipant) {
-              const otherId = buildPeerId(
-                nextSession._id,
-                otherParticipant._id
-              );
-              const newCall = peerRef.current.call(
-                otherId,
-                localStreamRef.current
-              );
-              if (newCall) {
-                setupCallHandlers(newCall);
-                callRef.current = newCall;
-              }
-            }
           });
       } else {
         console.warn("No audio sender found");
@@ -913,7 +898,7 @@ export default function SessionTab() {
             } catch (error) {
               console.error("Failed to restore audio track:", error);
             }
-          }, 150);
+          }, 100);
         }
 
         // Update local video display
@@ -929,52 +914,59 @@ export default function SessionTab() {
       // Start screen sharing
       try {
         console.log("Starting screen share...");
+
+        // Create a clean screen stream without audio processing during screen share
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: "always",
             width: { ideal: 1920 },
             height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
           },
-          audio: getAdvancedAudioConstraints().audio,
+          audio: {
+            echoCancellation: false, // Disable echo cancellation for screen audio
+            noiseSuppression: false, // Disable noise suppression for screen audio
+            autoGainControl: false, // Disable auto gain for screen audio
+            sampleRate: 48000,
+            channelCount: 1,
+          },
         });
 
-        let enhancedScreenStream = displayStream;
-        if (audioInitialized) {
-          try {
-            enhancedScreenStream =
-              await audioProcessorRef.current.processStream(displayStream);
-          } catch (error) {
-            console.warn("Could not process screen audio:", error);
-          }
-        }
-
-        screenStreamRef.current = enhancedScreenStream;
+        screenStreamRef.current = displayStream;
 
         // Update local video display to show screen share
         if (localVideoRef.current) {
-          localVideoRef.current.srcObject = enhancedScreenStream;
+          localVideoRef.current.srcObject = displayStream;
         }
 
         // Replace video track with screen share
-        const videoTrack = enhancedScreenStream.getVideoTracks()[0];
+        const videoTrack = displayStream.getVideoTracks()[0];
         if (videoTrack) {
           replaceVideoTrack(videoTrack);
           console.log("Screen video track applied");
         }
 
-        // Handle screen audio if available
-        if (enhancedScreenStream.getAudioTracks().length > 0) {
-          const audioTrack = enhancedScreenStream.getAudioTracks()[0];
-          if (audioTrack) {
-            // Small delay to ensure track replacement happens after video
+        // Handle screen audio if available - KEEP MICROPHONE AUDIO ACTIVE
+        if (displayStream.getAudioTracks().length > 0) {
+          const screenAudioTrack = displayStream.getAudioTracks()[0];
+          if (screenAudioTrack) {
+            // For screen sharing, we'll keep both microphone and screen audio active
+            // but prioritize screen audio by replacing the track
             setTimeout(() => {
-              replaceAudioTrack(audioTrack);
+              replaceAudioTrack(screenAudioTrack);
             }, 100);
             setScreenAudioOn(true);
             console.log("Screen audio track applied");
           }
         } else {
-          console.log("No screen audio tracks available");
+          // If no screen audio, ensure microphone continues working
+          const micAudioTrack = localStreamRef.current?.getAudioTracks()[0];
+          if (micAudioTrack && micOn) {
+            setTimeout(() => {
+              replaceAudioTrack(micAudioTrack);
+            }, 100);
+          }
+          console.log("No screen audio tracks available, using microphone");
         }
 
         // Handle screen share ending by user (browser controls)
@@ -1113,8 +1105,15 @@ export default function SessionTab() {
     if (!localStreamRef.current) return;
     const videoTracks = localStreamRef.current.getVideoTracks();
     if (videoTracks.length > 0) {
-      videoTracks.forEach((t) => (t.enabled = !t.enabled));
-      setCameraOn((prev) => !prev);
+      const newState = !cameraOn;
+      videoTracks.forEach((t) => (t.enabled = newState));
+      setCameraOn(newState);
+
+      if (newState) {
+        console.log("Camera enabled");
+      } else {
+        console.log("Camera disabled");
+      }
     }
   };
 
