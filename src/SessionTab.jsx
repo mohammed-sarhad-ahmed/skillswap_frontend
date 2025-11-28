@@ -265,8 +265,8 @@ const getAdvancedAudioConstraints = () => ({
     latency: 0,
   },
   video: {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
     frameRate: { ideal: 30 },
   },
 });
@@ -919,8 +919,8 @@ export default function SessionTab() {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: "always",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             frameRate: { ideal: 30 },
           },
           audio: {
