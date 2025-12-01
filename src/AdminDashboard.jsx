@@ -33,6 +33,8 @@ import {
   Image,
   Download,
   ExternalLink,
+  Filter,
+  Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "./Config";
@@ -2374,7 +2376,7 @@ function RatingsTab() {
   );
 }
 
-// Reports Tab Component with FIXED Download Functionality
+// Reports Tab Component with AI Validation
 function ReportsTab() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2382,8 +2384,8 @@ function ReportsTab() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedReport, setSelectedReport] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [defenseModal, setDefenseModal] = useState(false);
-  const [selectedDefense, setSelectedDefense] = useState(null);
+  const [showAllReports, setShowAllReports] = useState(false);
+  const [showOnlyAIInvalid, setShowOnlyAIInvalid] = useState(false);
 
   // Get admin token
   const getAdminToken = () => {
@@ -2428,29 +2430,6 @@ function ReportsTab() {
     const cleanPath = proofPath.startsWith("/")
       ? proofPath.slice(1)
       : proofPath;
-
-    // Ensure API_BASE_URL doesn't have trailing slash and path doesn't have leading slash
-    const baseUrl = API_BASE_URL.endsWith("/")
-      ? API_BASE_URL.slice(0, -1)
-      : API_BASE_URL;
-    const finalPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
-
-    return `${baseUrl}${finalPath}`;
-  };
-
-  // Fix the defense image URL function
-  const getDefenseImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-
-    // Handle different URL formats
-    if (imagePath.startsWith("http")) {
-      return imagePath; // Already a full URL
-    }
-
-    // Remove leading slash if present and clean the path
-    const cleanPath = imagePath.startsWith("/")
-      ? imagePath.slice(1)
-      : imagePath;
 
     // Ensure API_BASE_URL doesn't have trailing slash and path doesn't have leading slash
     const baseUrl = API_BASE_URL.endsWith("/")
@@ -2507,43 +2486,6 @@ function ReportsTab() {
     }
   };
 
-  // Fetch defense for a report
-  const fetchDefense = async (reportId) => {
-    try {
-      const token = getAdminToken();
-      if (!token) {
-        toast.error("Admin authentication required");
-        return;
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/admin/defense/${reportId}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            adminAuth: token,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        throw new Error(`Failed to fetch defense: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.status && data.status.toLowerCase() === "success") {
-        return data.data;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error fetching defense:", error);
-      return null;
-    }
-  };
-
   // Helper function to get user display name
   const getUserDisplayName = (user) => {
     if (!user) return "Unknown User";
@@ -2554,7 +2496,23 @@ function ReportsTab() {
     fetchReports();
   }, []);
 
+  // Filter reports based on AI validation and admin filters
   const filteredReports = reports.filter((report) => {
+    // Apply AI validation logic: show by default only if AI says it's valid
+    // If AI says invalid, only show when admin uses filter
+    if (!showAllReports && !showOnlyAIInvalid) {
+      // Default view: only show AI-validated reports
+      if (report.isValidAI === false) {
+        return false;
+      }
+    } else if (showOnlyAIInvalid) {
+      // Filter for AI-invalid reports only
+      if (report.isValidAI !== false) {
+        return false;
+      }
+    }
+    // else showAllReports = true: show all reports regardless of AI validation
+
     const matchesSearch =
       getUserDisplayName(report.reportedBy)
         .toLowerCase()
@@ -2574,20 +2532,6 @@ function ReportsTab() {
   const handleViewReport = (report) => {
     setSelectedReport(report);
     setShowModal(true);
-  };
-
-  const handleViewDefense = async (report) => {
-    try {
-      const defense = await fetchDefense(report._id);
-      setSelectedDefense({
-        report,
-        defense,
-      });
-      setDefenseModal(true);
-    } catch (error) {
-      console.error("Error loading defense:", error);
-      toast.error("Failed to load defense");
-    }
   };
 
   const handleAcceptReport = async (reportId) => {
@@ -2679,6 +2623,30 @@ function ReportsTab() {
     }
   };
 
+  const getAIValidationBadge = (isValidAI) => {
+    if (isValidAI === true) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+          <Sparkles className="h-3 w-3 mr-1" />
+          AI Valid
+        </span>
+      );
+    } else if (isValidAI === false) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+          <Sparkles className="h-3 w-3 mr-1" />
+          AI Invalid
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+        <Sparkles className="h-3 w-3 mr-1" />
+        AI Pending
+      </span>
+    );
+  };
+
   const getTitleDisplay = (title) => {
     const titleMap = {
       spam: "Spam or Scam",
@@ -2710,14 +2678,14 @@ function ReportsTab() {
             Reports Management
           </h2>
           <p className="text-gray-600 mt-1 text-sm sm:text-base">
-            Review and manage user reports with defense system
+            AI-validated reports with intelligent filtering
           </p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-blue-600">
-            {reports.length}
+            {filteredReports.length}
           </div>
-          <div className="text-sm text-gray-600">Total Reports</div>
+          <div className="text-sm text-gray-600">Visible Reports</div>
         </div>
       </div>
 
@@ -2757,6 +2725,54 @@ function ReportsTab() {
               <option value="rejected">Rejected</option>
             </select>
           </div>
+
+          {/* AI Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              AI Validation
+            </label>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  setShowAllReports(false);
+                  setShowOnlyAIInvalid(false);
+                }}
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                  !showAllReports && !showOnlyAIInvalid
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                AI Valid Only
+              </button>
+              <button
+                onClick={() => {
+                  setShowAllReports(true);
+                  setShowOnlyAIInvalid(false);
+                }}
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                  showAllReports && !showOnlyAIInvalid
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                All Reports
+              </button>
+              <button
+                onClick={() => {
+                  setShowAllReports(false);
+                  setShowOnlyAIInvalid(true);
+                }}
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                  showOnlyAIInvalid
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                AI Invalid
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2785,10 +2801,10 @@ function ReportsTab() {
             </div>
             <div className="ml-3">
               <p className="text-xs sm:text-sm font-medium text-gray-600">
-                Accepted
+                AI Valid
               </p>
               <p className="text-lg sm:text-xl font-bold text-gray-900">
-                {reports.filter((r) => r.status === "accepted").length}
+                {reports.filter((r) => r.isValidAI === true).length}
               </p>
             </div>
           </div>
@@ -2797,14 +2813,14 @@ function ReportsTab() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center">
             <div className="p-2 bg-red-100 rounded-lg">
-              <Ban className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
+              <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
             </div>
             <div className="ml-3">
               <p className="text-xs sm:text-sm font-medium text-gray-600">
-                Rejected
+                AI Invalid
               </p>
               <p className="text-lg sm:text-xl font-bold text-gray-900">
-                {reports.filter((r) => r.status === "rejected").length}
+                {reports.filter((r) => r.isValidAI === false).length}
               </p>
             </div>
           </div>
@@ -2837,7 +2853,7 @@ function ReportsTab() {
                   Report Details
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                  Users
+                  AI Validation
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -2873,32 +2889,25 @@ function ReportsTab() {
                             Has proof
                           </span>
                         )}
-                        {/* Mobile user info */}
+                        {/* Mobile AI info */}
                         <div className="sm:hidden mt-2">
-                          <div className="flex items-center text-xs text-gray-500">
-                            <User className="h-3 w-3 mr-1" />
-                            {getUserDisplayName(report.reportedBy)} →{" "}
-                            {getUserDisplayName(report.reportedUser)}
-                          </div>
+                          {getAIValidationBadge(report.isValidAI)}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-4 hidden sm:table-cell">
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm">
-                        <User className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="font-medium text-gray-900">
-                          {getUserDisplayName(report.reportedBy)}
-                        </span>
-                        <span className="text-gray-500 ml-1">(reporter)</span>
-                      </div>
-                      <div className="flex items-center text-sm">
-                        <User className="h-4 w-4 text-red-400 mr-2" />
-                        <span className="font-medium text-gray-900">
-                          {getUserDisplayName(report.reportedUser)}
-                        </span>
-                      </div>
+                    <div className="flex items-center">
+                      {getAIValidationBadge(report.isValidAI)}
+                      {report.isValidAI === false &&
+                        report.AIrejectionReason && (
+                          <span
+                            className="ml-2 text-xs text-gray-500 cursor-help"
+                            title={report.AIrejectionReason}
+                          >
+                            ⓘ
+                          </span>
+                        )}
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -2921,14 +2930,6 @@ function ReportsTab() {
                       >
                         <Eye className="h-4 w-4 mr-1" />
                         View
-                      </button>
-
-                      <button
-                        onClick={() => handleViewDefense(report)}
-                        className="inline-flex items-center justify-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-                      >
-                        <ShieldAlert className="h-4 w-4 mr-1" />
-                        Defense
                       </button>
 
                       {report.status === "pending" && (
@@ -3004,6 +3005,54 @@ function ReportsTab() {
             </div>
 
             <div className="p-4 sm:p-6 space-y-6">
+              {/* AI Validation Status */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Sparkles className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700">
+                        AI Analysis
+                      </h3>
+                      <div className="mt-1">
+                        {selectedReport.isValidAI === true ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            AI Validated ✓
+                          </span>
+                        ) : selectedReport.isValidAI === false ? (
+                          <div className="space-y-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              AI Invalid
+                            </span>
+                            {selectedReport.AIrejectionReason && (
+                              <p className="text-sm text-gray-700 mt-1">
+                                <span className="font-medium">Reason:</span>{" "}
+                                {selectedReport.AIrejectionReason}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                            <Clock className="h-3 w-3 mr-1" />
+                            AI Analysis Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    This report is{" "}
+                    {selectedReport.isValidAI === true
+                      ? "shown by default"
+                      : selectedReport.isValidAI === false
+                      ? "hidden by default"
+                      : "pending analysis"}
+                  </div>
+                </div>
+              </div>
+
               {/* User Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -3137,14 +3186,6 @@ function ReportsTab() {
                     Actions
                   </h3>
                   <div className="space-y-3">
-                    <button
-                      onClick={() => handleViewDefense(selectedReport)}
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
-                    >
-                      <ShieldAlert className="h-4 w-4 mr-2" />
-                      View Defense
-                    </button>
-
                     {selectedReport.status === "pending" ? (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
@@ -3172,214 +3213,6 @@ function ReportsTab() {
                     )}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Defense Detail Modal */}
-      {defenseModal && selectedDefense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 sm:p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <ShieldAlert className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                      User Defense
-                    </h2>
-                    <p className="text-sm text-gray-500">
-                      Defense for report:{" "}
-                      {getTitleDisplay(selectedDefense.report.title)}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setDefenseModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="h-5 w-5 text-gray-500" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-6">
-              {/* Defense Information */}
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  Defense Submitted By
-                </h3>
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <span className="font-medium">Name:</span>{" "}
-                    {getUserDisplayName(selectedDefense.report.reportedUser)}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Email:</span>{" "}
-                    {selectedDefense.report.reportedUser?.email || "Unknown"}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">User ID:</span>{" "}
-                    {selectedDefense.report.reportedUser?._id || "Unknown"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Defense Text */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  Defense Statement
-                </h3>
-                <div className="bg-white border border-blue-200 rounded-lg p-4">
-                  {selectedDefense.defense ? (
-                    <>
-                      <p className="text-sm text-gray-900 mb-4">
-                        {selectedDefense.defense.defenseText ||
-                          "No defense text provided."}
-                      </p>
-                      {selectedDefense.defense.submittedAt && (
-                        <p className="text-xs text-gray-500">
-                          Submitted:{" "}
-                          {new Date(
-                            selectedDefense.defense.submittedAt
-                          ).toLocaleString()}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-8">
-                      <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-500">No defense submitted yet</p>
-                      <p className="text-gray-400 text-sm mt-1">
-                        The reported user has not submitted a defense statement
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Defense Proof Images with FIXED Download */}
-              {selectedDefense.defense &&
-                selectedDefense.defense.defenseImage && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Defense Proof
-                    </h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="h-64 bg-gray-100 flex items-center justify-center">
-                        <img
-                          src={getDefenseImageUrl(
-                            selectedDefense.defense.defenseImage
-                          )}
-                          alt="Defense proof"
-                          className="h-full w-full object-contain"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                        <div className="hidden h-full w-full items-center justify-center bg-gray-100">
-                          <Image className="h-12 w-12 text-gray-400" />
-                          <span className="ml-2 text-gray-500">
-                            Defense Image
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex justify-center space-x-4 p-4 bg-gray-50 border-t border-gray-200">
-                        <button
-                          onClick={() =>
-                            downloadImage(
-                              getDefenseImageUrl(
-                                selectedDefense.defense.defenseImage
-                              ),
-                              `defense-${selectedDefense.report._id}.jpg`
-                            )
-                          }
-                          className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <Download className="h-4 w-4" />
-                          <span>Download</span>
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleOpenInNewTab(
-                              getDefenseImageUrl(
-                                selectedDefense.defense.defenseImage
-                              )
-                            )
-                          }
-                          className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          <span>Open in New Tab</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              {/* Original Report Reference */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  Original Report Reference
-                </h3>
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <span className="font-medium">Report Type:</span>{" "}
-                    {getTitleDisplay(selectedDefense.report.title)}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Reason:</span>{" "}
-                    {selectedDefense.report.reason}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Status:</span>{" "}
-                    <span
-                      className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                        selectedDefense.report.status
-                      )}`}
-                    >
-                      {selectedDefense.report.status}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setDefenseModal(false);
-                    setShowModal(true);
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors font-medium"
-                >
-                  View Full Report
-                </button>
-                {selectedDefense.report.status === "pending" && (
-                  <>
-                    <button
-                      onClick={() =>
-                        handleAcceptReport(selectedDefense.report._id)
-                      }
-                      className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                    >
-                      Accept Report
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleRejectReport(selectedDefense.report._id)
-                      }
-                      className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium"
-                    >
-                      Reject Report
-                    </button>
-                  </>
-                )}
               </div>
             </div>
           </div>
