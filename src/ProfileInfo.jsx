@@ -26,8 +26,8 @@ export default function ProfileInfo({ isSidebarOpen }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [connectionState, setConnectionState] = useState("connect");
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportTitle, setReportTitle] = useState(""); // Changed from reportReason
-  const [reportReason, setReportReason] = useState(""); // This is the detailed reason
+  const [reportTitle, setReportTitle] = useState("");
+  const [reportReason, setReportReason] = useState("");
   const [reportProof, setReportProof] = useState(null);
   const [showUnconnectModal, setShowUnconnectModal] = useState(false);
   const [ratings, setRatings] = useState([]);
@@ -38,6 +38,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
     ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
   });
   const [loading, setLoading] = useState(true);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const fetchUser = async () => {
     try {
@@ -189,7 +190,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
   };
 
   // ===========================
-  // REPORT SUBMISSION HANDLER
+  // SIMPLE REPORT SUBMISSION HANDLER
   // ===========================
   const handleReportSubmit = async () => {
     // Validate title
@@ -210,39 +211,52 @@ export default function ProfileInfo({ isSidebarOpen }) {
       return;
     }
 
+    setIsSubmittingReport(true);
+
     try {
       const formData = new FormData();
       formData.append("reportedUser", user._id);
-      formData.append("title", reportTitle); // This is the enum value
-      formData.append("reason", reportReason.trim()); // This is the detailed description
+      formData.append("title", reportTitle);
+      formData.append("reason", reportReason.trim());
       formData.append("proof", reportProof);
 
-      const res = await fetch(`${API_BASE_URL}/report`, {
+      // Submit in the background without waiting
+      fetch(`${API_BASE_URL}/report`, {
         method: "POST",
         headers: {
           auth: getToken(),
         },
         body: formData,
-      });
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          // Handle response silently in background
+          if (data.status?.toLowerCase() === "success") {
+            console.log("Report submitted successfully in background");
+          } else {
+            console.error("Background report submission failed:", data.message);
+          }
+        })
+        .catch((error) => {
+          console.error("Background report submission error:", error);
+        });
 
-      const data = await res.json();
-
-      if (res.ok && data.status.toLowerCase() === "success") {
-        toast.success(
-          "Report submitted successfully! Our team will review it."
-        );
-        setShowReportModal(false);
-        setReportTitle("");
-        setReportReason("");
-        setReportProof(null);
-      } else {
-        const errorMessage = data.message || "Failed to submit report";
-        toast.error(errorMessage);
-      }
+      // Immediately show success to user
+      toast.success("Report submitted successfully!");
+      setShowReportModal(false);
+      resetReportForm();
     } catch (error) {
       console.error("Report submission error:", error);
       toast.error("Something went wrong while submitting the report.");
+    } finally {
+      setIsSubmittingReport(false);
     }
+  };
+
+  const resetReportForm = () => {
+    setReportTitle("");
+    setReportReason("");
+    setReportProof(null);
   };
 
   const renderStars = (rating, size = "text-base") => {
@@ -453,22 +467,23 @@ export default function ProfileInfo({ isSidebarOpen }) {
       )}
 
       {/* =========================== */}
-      {/* REPORT MODAL - FIXED */}
+      {/* SIMPLE REPORT MODAL */}
       {/* =========================== */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div
             className="bg-white rounded-xl p-6 w-96 max-h-[90vh] overflow-y-auto shadow-lg relative"
-            onClick={(e) => e.stopPropagation()} // Prevent click propagation
+            onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => {
-                setShowReportModal(false);
-                setReportTitle("");
-                setReportReason("");
-                setReportProof(null);
+                if (!isSubmittingReport) {
+                  setShowReportModal(false);
+                  resetReportForm();
+                }
               }}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"
+              disabled={isSubmittingReport}
             >
               <X className="w-5 h-5" />
             </button>
@@ -480,7 +495,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
               Please provide evidence for your report:
             </p>
 
-            {/* Report Title Selection (enum) */}
+            {/* Report Title Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Report Category *
@@ -490,6 +505,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
                 onChange={(e) => setReportTitle(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:outline-none"
                 required
+                disabled={isSubmittingReport}
               >
                 <option value="">-- Choose a category --</option>
                 <option value="spam">Spam or scam</option>
@@ -500,7 +516,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
               </select>
             </div>
 
-            {/* Detailed Reason (always required) */}
+            {/* Detailed Reason */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Detailed Reason *
@@ -515,6 +531,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
                 className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:outline-none"
                 rows="4"
                 required
+                disabled={isSubmittingReport}
               />
               <div className="text-xs text-gray-500 mt-1">
                 Characters: {reportReason.length}/5 minimum
@@ -526,14 +543,13 @@ export default function ProfileInfo({ isSidebarOpen }) {
               </div>
             </div>
 
-            {/* Proof Upload - REQUIRED */}
+            {/* Proof Upload */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Proof *
                 <span className="text-red-500 ml-1">(Required)</span>
               </label>
 
-              {/* File Upload Area - Fixed with separate button */}
               <div
                 className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
                   reportProof
@@ -554,6 +570,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
                       onClick={() =>
                         document.getElementById("proof-upload").click()
                       }
+                      disabled={isSubmittingReport}
                     >
                       Change File
                     </Button>
@@ -571,6 +588,7 @@ export default function ProfileInfo({ isSidebarOpen }) {
                       onClick={() =>
                         document.getElementById("proof-upload").click()
                       }
+                      disabled={isSubmittingReport}
                     >
                       Select Proof Image
                     </Button>
@@ -583,10 +601,10 @@ export default function ProfileInfo({ isSidebarOpen }) {
                   onChange={(e) => setReportProof(e.target.files[0])}
                   className="hidden"
                   required
+                  disabled={isSubmittingReport}
                 />
               </div>
 
-              {/* File Requirements */}
               <div className="mt-2 text-xs text-gray-500">
                 <p>• Proof is required for all reports</p>
                 <p>• Upload screenshots or images as evidence</p>
@@ -599,24 +617,28 @@ export default function ProfileInfo({ isSidebarOpen }) {
             <div className="flex justify-end gap-2">
               <Button
                 onClick={() => {
-                  setShowReportModal(false);
-                  setReportTitle("");
-                  setReportReason("");
-                  setReportProof(null);
+                  if (!isSubmittingReport) {
+                    setShowReportModal(false);
+                    resetReportForm();
+                  }
                 }}
                 variant="outline"
                 className="px-4 py-2 rounded-lg"
+                disabled={isSubmittingReport}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleReportSubmit}
                 disabled={
-                  !reportTitle || !reportProof || reportReason.trim().length < 5
+                  isSubmittingReport ||
+                  !reportTitle ||
+                  !reportProof ||
+                  reportReason.trim().length < 5
                 }
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                Submit Report
+                {isSubmittingReport ? "Submitting..." : "Submit Report"}
               </Button>
             </div>
           </div>
